@@ -1,0 +1,56 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Testing / coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# --- Playwright (browser binaries + traces; never commit downloaded binaries) ---
+# Provisioned via `python -m playwright install chromium` (see README setup step).
+.cache/ms-playwright/
+playwright-report/
+test-results/
+*.trace.zip
+
+# --- Audit run artifacts (regenerate on demand; keep the repo clean) ---
+# The checked-in reference sample lives at
+# skills/audit-orchestrator/references/sample-report.json — do NOT ignore that one.
+/report.html
+/report.json
+/*.report.html
+/*.report.json
+/tmp_artifact*.json
+
+# --- Environment / secrets ---
+.env
+.env.*
+*.local
+
+# --- OS cruft ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Logs ---
+*.log

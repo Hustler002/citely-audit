@@ -1,0 +1,29 @@
+[project]
+name = "brand-ai-readiness-audit"
+version = "0.1.0"
+description = "Agent Skill Marketplace auditing website AI-discoverability and on-site engagement."
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+
+# Pinned for reproducibility. Playwright is required only for Tier-A rendering
+# (see the tiered rendering strategy); the audit degrades gracefully without it.
+dependencies = [
+    "requests==2.32.3",
+    "beautifulsoup4==4.12.3",
+    "lxml==5.3.0",
+    "jsonschema==4.23.0",
+    "playwright==1.47.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# NOTE: After `pip install -e .` (or installing the pinned deps), the Chromium
+# binary must be provisioned ONCE as a setup step — it is intentionally NOT
+# downloaded inside the timed audit run:
+#     python -m playwright install chromium

@@ -1,0 +1,39 @@
+{
+  "name": "brand-ai-readiness-audit",
+  "version": "0.1.0",
+  "description": "Agent Skill Marketplace that audits an arbitrary website for off-site AI discoverability and on-site engagement, emitting a single evidence-backed JSON report.",
+  "license": "Apache-2.0",
+  "skills": [
+    {
+      "name": "audit-orchestrator",
+      "path": "skills/audit-orchestrator",
+      "entrypoint": true,
+      "description": "Sequences the audit: single safe crawl + render, runs the four analysis skills, merges/ranks findings, computes the discoverability score, validates and emits the final report."
+    },
+    {
+      "name": "crawl-render-extraction-audit",
+      "path": "skills/crawl-render-extraction-audit",
+      "entrypoint": false,
+      "description": "Mechanic 1 — Access, Render/Readability (raw-vs-rendered diff or browserless heuristic), and Fact Extraction over the shared crawl artifact."
+    },
+    {
+      "name": "quotability-density-audit",
+      "path": "skills/quotability-density-audit",
+      "entrypoint": false,
+      "description": "Mechanics 2 + 3 — RAG quotability and information-density / summarizer-survival analysis over rendered HTML."
+    },
+    {
+      "name": "entity-corroboration-audit",
+      "path": "skills/entity-corroboration-audit",
+      "entrypoint": false,
+      "description": "Mechanic 4 — structured-data (JSON-LD/OG/microdata) entity-graph extraction and optional soft-fail Wikidata corroboration."
+    },
+    {
+      "name": "engagement-orientation-audit",
+      "path": "skills/engagement-orientation-audit",
+      "entrypoint": false,
+      "description": "Mechanic 5 — deterministic first-viewport orientation and visitor-retention heuristics over the rendered DOM."
+    }
+  ],
+  "_note": "marketplace.json and the `entrypoint` flag are this project's bespoke platform convention. They are NOT part of the base agentskills.io spec, which defines only the per-skill folder + SKILL.md format."
+}
