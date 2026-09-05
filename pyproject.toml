@@ -1,5 +1,5 @@
 [project]
-name = "brand-ai-readiness-audit"
+name = "citely-audit"
 version = "0.1.0"
 description = "Agent Skill Marketplace auditing website AI-discoverability and on-site engagement."
 requires-python = ">=3.11"
@@ -19,6 +19,14 @@ dependencies = [
 dev = [
     "pytest==8.3.3",
 ]
+
+# This project intentionally ships NO importable Python package. Every skill is a
+# self-contained agentskills.io folder whose scripts are invoked by path (subprocess),
+# never imported across skill boundaries. Declaring an empty package list stops
+# setuptools auto-discovery from failing on the top-level config/ skills/ tests/ dirs,
+# so `pip install -e .` resolves dependencies only.
+[tool.setuptools]
+packages = []
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

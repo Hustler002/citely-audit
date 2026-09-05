@@ -1,94 +1,221 @@
-# CLAUDE.md — Project State & Handoff
+# CLAUDE.md — Citely · Project State & Progress
 
-> Purpose: single source of truth for a **new chat session** to resume this project without re-deriving
-> context. Update the "Progress log" and "Current status" sections as work advances.
+> **Purpose: the running record of progress.** A new chat session reads this to learn where the work
+> actually stands. Update "Current status", the task checklists, and the "Progress log" as work advances.
+
+## Document roles (read in this order)
+
+| File | Role | Authority |
+|---|---|---|
+| [`CONTEXT.md`](CONTEXT.md) | Original **problem statement** + the very first draft design | **Historical only.** Preserved verbatim; superseded — do not implement from it |
+| [`PLAN.md`](PLAN.md) | **MASTER PLAN v3** — the final, rubric-aligned implementation plan | **Authoritative.** All design decisions live here |
+| `CLAUDE.md` (this file) | **Progress** — what is done, what is next, current repo state | Authoritative for *status*, never for *design* |
+| [`README.md`](README.md) | Usage, setup, security posture | User-facing |
+
+If this file and `PLAN.md` ever disagree on design, **`PLAN.md` wins** — and fix this file.
 
 ## What this project is
 
-**Brand AI-Readiness Audit** — an Agent Skill Marketplace (`agentskills.io`-compliant) that audits an
-arbitrary website and diagnoses (1) **off-site AI discoverability** (why AI assistants fail to crawl /
-extract / corroborate / cite the brand's facts) and (2) **on-site engagement** (why AI-referred visitors
-bounce). Runs read-only, non-destructive, targets a **< 5-minute** budget, and emits **one JSON report**.
+**Citely — Brand AI-Readiness Audit**: an Agent Skill Marketplace (`agentskills.io`-compliant) that audits
+a website and diagnoses (1) **off-site AI discoverability** (why AI assistants fail to crawl / extract /
+corroborate / cite the brand's facts) and (2) **on-site engagement** (why AI-referred visitors bounce).
+Read-only, non-destructive, **< 5-minute** budget, emits one JSON report (+ optional HTML).
 
-Built around the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG quotability,
+Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG quotability,
 (3) information density / summarizer survival, (4) entity disambiguation & cross-web corroboration,
 (5) first-viewport orientation & retention.
 
-## Key documents (read these first)
-- `../CONTEXT.md` (user's Downloads, i.e. `C:\Users\PRIYANSHU PAL\Downloads\CONTEXT.md`) — original brief + handoff.
-- Approved plan: `C:\Users\PRIYANSHU PAL\.claude\plans\c-users-priyanshu-pal-downloads-context-whimsical-pike.md`
-  — the production-ready plan with the full list of mistakes found in the original and the corrected design.
-- `README.md` — usage, security posture, setup.
+## Repository state (verified)
 
-## Locked decisions (do not re-litigate)
-- **Orchestration** = subprocess + JSON file contract. Orchestrator owns ALL network I/O; the 3 analysis
-  sub-skills are pure, network-free consumers of a shared crawl artifact.
-- **Rendering** = tiered. Tier A = Playwright render diff; Tier B = browserless SPA heuristic when no
-  browser; hybrid warning finding + `diagnostics.render_mode`. Chromium is provisioned as a SETUP step,
-  never inside the timed run.
-- **Page scope** = homepage-only for v1 (clean extension point left for multi-page).
-- **Report additions adopted**: `discoverability_score` (0–100), `diagnostics` block, `partial`+reason,
-  `sample-report.json`, `suggested_action.snippet`.
-- **Severity** = strict 3-tier (`critical`/`high`/`medium`), no `low`. Invariant enforced in code:
-  `total_findings == critical + high + medium`.
-- **Confidence** = `verified` (directly observed) vs `heuristic` (inference, the default).
-- **Wikidata lookup** = the ONE sanctioned network exception; off by default, `--allow-external` only,
-  soft-fail, findings labeled `heuristic`.
-- Each skill is a self-contained folder (agentskills.io rule) → scripts embed their own config defaults
-  rather than importing a shared module; drift is caught by tests, not prevented by imports.
+- **Path / git root:** `C:\Users\PRIYANSHU PAL\Desktop\ADOBE\citely-audit`
+- **Branch:** `main` · **Commits:** `ab10281 Initial project structure` (30 files tracked)
+- `.gitignore` present. `PLAN.md` added to the repo (untracked at time of writing).
+- Project renamed `brand-ai-readiness-audit` → **`citely-audit`**. Identity fields rebranded;
+  **skill folder names deliberately unchanged** (descriptive + agentskills.io-valid).
+
+## Locked decisions (current — per PLAN.md v3; do not re-litigate)
+
+- **Recommend-only.** No skill modifies any site. No apply-fix, no re-audit loop, no writes to the target.
+  Suggestions may be **proactive** (improvements where no defect was found).
+- **Orchestration** = subprocess + JSON file contract. The orchestrator owns **ALL** network I/O; every
+  analyzer is a pure, network-free function of the shared crawl artifact — **zero exceptions**.
+- **Wikidata lookup** sits **in the orchestrator's fetch stage** (left of the artifact boundary), stored as
+  `external_corroboration`. Off by default (`--allow-external`), soft-fail → dependent checks `unknown`.
+- **Rendering** = tiered. Tier A = Playwright render diff; Tier B = browserless SPA heuristic. Chromium is
+  provisioned as a SETUP step, never inside the timed run. Disclosed via `diagnostics.render_mode`.
+- **Page scope** = homepage + **sitemap-aware sample** (default 5), degrading silently to homepage-only.
+  Page count is a budget-derived *maximum*; skipped pages' checks are `unknown`, never `fail`.
+- **Scoring** = capability model. Checks resolve to `pass`/`partial`/`fail`/`not_applicable`/`unknown`;
+  category score = weighted mean over *applicable* checks only. `unknown`/`not_applicable` leave the
+  denominator. **Dependency suppression** collapses correlated findings; **anti-dodge rule** = suppression
+  requires a `verified` failed prerequisite.
+- **Severity** = strict 3-tier (`critical`/`high`/`medium`), no `low`. Invariant: `total_findings ==
+  critical + high + medium`. Proactive items are **not findings** — separate `recommendations[]`.
+- **Confidence** = `verified` vs `heuristic`. `summary.score_confidence` is a ratio, not a third value.
+- **`summary.coverage`** (added in Phase 1) = share of total check weight actually scored. **Independent of
+  confidence** and both are required: a CSR shell suppresses ~19/24 checks and scores 85 at confidence 1.0,
+  but coverage 0.23 exposes that the headline rests on a thin slice. Never show a score without coverage.
+- **robots.txt = two separate concerns** (decided 2026-09-05, PLAN.md §6.3.1). (1) *Operational gate* —
+  may **CitelyAuditBot** fetch? If not: don't fetch, one critical finding, `partial_reason: "blocked"`,
+  `blocked_kind: "robots_disallowed"`, all checks `unknown` with reason `blocked_before_fetch`. **Never
+  scored.** (2) *Scored signal* — check `access.ai_crawlers_allowed` asks whether **GPTBot / ClaudeBot /
+  PerplexityBot / Google-Extended / CCBot** etc. are allowed. A site can allow us and still be invisible
+  to ChatGPT; scoring our own access would pass on every site and miss that entirely. This check has
+  **no dependents by design** — an AI-crawler block doesn't stop *us* reading the page.
+- **`summary.discoverability_score`** retained as the **overall** score; category scores added alongside.
+- **No LLM anywhere** in the fetch, analysis, or scoring path — the basis of determinism, auditability,
+  and prompt-injection resistance.
+- **i18n gating:** language-dependent checks return `unknown` (never `fail`) when page language is
+  undetected/unsupported. Prevents mass false positives on non-English sites.
+- Each skill is a self-contained folder → scripts embed their own config defaults rather than importing a
+  shared module; drift is caught by tests.
 
 ## Verified spec facts (agentskills.io)
+
 - Skill = folder + `SKILL.md`; required frontmatter is only `name` + `description`. Optional: `license`,
-  `compatibility` (≤500 chars, for env needs), `metadata` (string→string), `allowed-tools` (experimental).
-- `name`: ≤64 chars, lowercase alnum + single hyphens, no leading/trailing/consecutive hyphens, MUST match
-  folder name.
+  `compatibility` (≤500 chars), `metadata` (string→string), `allowed-tools` (experimental).
+- `name`: ≤64 chars, lowercase alnum + single hyphens, no leading/trailing/consecutive hyphens,
+  MUST match the folder name.
 - Body recommended < 5000 tokens / < 500 lines; push detail to `references/`.
-- Base spec has **no** `marketplace.json` / `entrypoint` concept — those are this project's bespoke convention.
-- Official validator: `skills-ref validate ./<skill>` (from github.com/agentskills/agentskills).
+- Base spec has **no** `marketplace.json` / `entrypoint` concept — bespoke to this brief.
+- Official validator: `skills-ref validate ./<skill>` (github.com/agentskills/agentskills).
 
-## Current status: ARCHITECTURE SCAFFOLD COMPLETE — logic NOT implemented
+## Current status: PHASE 1 COMPLETE — scoring spine implemented and tested
 
-Directory structure, manifest, both JSON Schemas, config, all 5 SKILL.md files, fixtures, fixture server,
-README, and CLAUDE.md are in place. All Python check/fetch/orchestration bodies are `TODO` /
-`NotImplementedError` skeletons with the CLI + I/O contract wired. Test files are `pytest.mark.skip` stubs.
+The scoring engine, check registry, and both schema contracts are **done and green (69 tests)**.
+Fetch / render / analyzer bodies remain `TODO` skeletons; their test files are still `pytest.mark.skip`
+stubs (13 skips, expected).
+
+**Environment:** `.venv/` created, all pinned deps installed (`pytest`, `jsonschema`, `lxml`,
+`beautifulsoup4`, `playwright`, `requests`). Chromium browsers NOT yet provisioned (Phase 3).
+Run tests with `./.venv/Scripts/python.exe -m pytest`.
+**Disk note:** the drive hit 100% mid-setup; keep ~1 GB free — Chromium needs ~150 MB in Phase 3.
+
+### Implementation phases
+| Phase | Scope | Status |
+|---|---|---|
+| 1 | Scoring spine & schema contracts | ✅ **DONE** |
+| 2 | Safe acquisition (`_safe_fetch.py`, SSRF, robots) + security corpus | next |
+| 3 | Artifact pipeline (`_page_select.py`, `_render.py` Tier A/B) | |
+| 4 | Structural analyzers (crawl/render/extraction, entity) | |
+| 5 | Parity analyzers + i18n (engagement, quotability) | |
+| 6 | Orchestration & report assembly | |
+| 7 | `remediation-advisor` (6th skill) + proactive suggestions | |
+| 8 | Non-expert output layer + `render_html.py` | |
+| 9 | `labeled_corpus.json` + precision/recall + archetype fixtures | |
+| 10 | Compliance & sign-off (`skills-ref validate`, README) | |
 
 ### Done
-- [x] Full tree per plan §2 (27 files).
-- [x] `marketplace.json` (one `entrypoint: true`), `pyproject.toml` (pinned deps, Py 3.11+).
-- [x] Contracts: `report-schema.json` (superset floor), `crawl-artifact-schema.json`.
-- [x] `config/scoring-config.json` (placeholder thresholds/weights), `severity-rubric.md`.
-- [x] 5 SKILL.md (valid frontmatter, `compatibility` where relevant).
-- [x] Script skeletons: `run_audit.py`, `_safe_fetch.py`, + 4 sub-skill scripts (dual-mode CLI, defaults, stubs).
-- [x] Fixtures (healthy SSR / broken CSR), `fixture_server.py` skeleton, placeholder `sample-report.json`.
+- [x] Full scaffold: manifest, 2 JSON Schemas, config, 5 `SKILL.md`, script skeletons, fixtures, tests.
+- [x] `pyproject.toml` (pinned deps, Py 3.11+); `.gitignore`; initial commit on `main`.
+- [x] `PLAN.md` (MASTER PLAN v3) added to the repo as the authoritative plan.
+- [x] **Rename to `citely-audit`** — `marketplace.json`, `pyproject.toml`, both schema `$id`s,
+      `report-schema.json` title, `audit-orchestrator/SKILL.md` `metadata.project`, `README.md` H1.
+- [x] `CONTEXT.md` marked historical (text preserved verbatim); `CLAUDE.md` re-synced to v3.
 
-### Not yet done (next implementation steps, in order)
-- [ ] `_safe_fetch.py`: SSRF guard (`validate_url`, `is_safe_ip`), `safe_get` redirect loop, `check_robots`.
-- [ ] `run_audit.py`: `build_crawl_artifact` (fetch+render, Playwright probe + Tier-B fallback),
-      `run_consumer` (subprocess), `assign_ids_and_summarize` (deterministic sort + score), `validate_report`.
-- [ ] 4 sub-skill check bodies (crawl/render/extraction, quotability/density, entity, engagement).
-- [ ] `fixture_server.py` routes; un-skip + implement all tests; regenerate `sample-report.json` from E2E.
-- [ ] Tune thresholds/weights in `scoring-config.json` against fixtures.
-- [ ] Run `skills-ref validate` on every skill folder.
+### Phase 1 delivered
+- [x] `config/checks.json` — 24 checks, **6 per category (exact parity)**, weights sum to 100 per category.
+- [x] `config/scoring-config.json` — rewritten for the capability model (v1's penalty model removed).
+- [x] `_scoring.py` — states/credits, category + overall scores, dependency suppression, **anti-dodge rule**,
+      i18n gating, `score_confidence`, **`coverage`**, `points_recoverable`, deterministic finding ids,
+      summary invariant enforcement, fail-fast registry validation (cycles, unknown deps, weight sums).
+- [x] Both schemas extended to v3 (`category_scores`, `score_confidence`, `coverage`, `recommendations[]`,
+      finding reasoning-chain fields, `partial_reason` enum, artifact `pages[]` + `external_corroboration`).
+- [x] `sample-report.json` rebuilt as the CSR-shell case; **every number verified against the engine**.
+- [x] `tests/test_scoring.py` (39) + `tests/test_schemas.py` (30) — **69 passing, 13 skipped** (skips are
+      Phase 2+ stub files).
+
+## ⚠ Open issues (as of 2026-09-04, end of Phase 1)
+
+| # | Issue | Severity | Status |
+|---|---|---|---|
+| 1 | Robots check had zero dependents / wrong subject | High | ✅ **RESOLVED 2026-09-05** — reframed, see Locked decisions |
+| 2 | Robots-block behaviour unspecified in PLAN.md v3 | High | ✅ **RESOLVED 2026-09-05** — decided and written into PLAN.md §6.3.1 |
+| 3 | `blocked_kind` enum had no robots value | Medium | ✅ **RESOLVED** — `robots_disallowed` added |
+| 4 | **Nothing is committed.** Phase 1 + robots reframe uncommitted. | Medium | **User commits manually** (their choice) |
+| 5 | **Disk headroom is thin** — ~738 MB free. Phase 3 needs ~150 MB for Chromium; the drive already hit 100% once during setup. | Medium | Monitor |
+| 6 | **Chromium not provisioned.** `playwright` package installed, browsers not. Needed for Tier-A rendering in Phase 3 (Tier B works without it). | Low | Phase 3 |
+
+**No known defects in the code** — scoring engine, registry and schemas are green (74 tests) and
+internally consistent. Remaining items 4–6 are environment/process, not code.
+
+### Not yet done — implementation order (PLAN.md §14)
+- [ ] **2.** `_safe_fetch.py` (SSRF: validate all A/AAAA, IP-pinning, redirect re-validation) + security corpus.
+- [ ] **3.** Artifact assembly, `_page_select.py` (sitemap → homepage fallback), `_render.py` (Tier A/B);
+      fixture server routes (robots, sitemap, redirect, bomb).
+- [ ] **4.** `crawl-render-extraction-audit` + `entity-corroboration-audit` (structural checks first).
+- [ ] **5.** `engagement-orientation-audit` + `quotability-density-audit` **at parity**, i18n gating built in.
+- [ ] **6.** Orchestrator wiring → schema-valid JSON report.
+- [ ] **7.** `remediation-advisor` skill (**new, 6th**) incl. non-obvious proactive suggestions.
+- [ ] **8.** Non-expert output layer + `render_html.py` (folded in — `report-renderer` was cut as padding).
+- [ ] **9.** `labeled_corpus.json` + precision/recall harness; non-English, consent-wall, adversarial fixtures.
+- [ ] **10.** `skills-ref validate` all 6 skills; README refresh; determinism + read-only sign-off.
+
+### Structural deltas from the current scaffold (v3 requires)
+- **Add** `config/checks.json` (check registry) — does not yet exist.
+- **Add** 6th skill `remediation-advisor/`; **do not** add `report-renderer` (cut as padding).
+- **Split** `run_audit.py` into `_render.py`, `_page_select.py`, `_scoring.py`, `render_html.py`.
+- **Add** fixture archetypes: static, spa, ecommerce, corporate, image-heavy, unstructured,
+  **non-english**, **consent-wall**, **adversarial** (+ `labeled_corpus.json`).
+- **Extend** schemas: `summary.category_scores`, `summary.score_confidence`, top-level `recommendations[]`,
+  `findings[].{page_url,check_id,measurement,threshold,selector,impact,plain_summary}`,
+  `suggested_action.validation`, `partial_reason` enum; artifact gains `pages[]` + `external_corroboration`.
 
 ## How to run / verify (once implemented)
+
+From the repo root (`citely-audit`):
 ```bash
 pip install -e .
 python -m playwright install chromium            # setup step, optional (Tier A)
-python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com     # online
-python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html  # offline
+python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com
+python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 pytest
-skills-ref validate ./skills/audit-orchestrator  # repeat per skill
+for s in skills/*/; do skills-ref validate "$s"; done
 ```
-Report goes to **stdout only**; logs to **stderr**.
+Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`.
 
 ## Conventions & guardrails
-- Read-only; respect robots.txt (stop if audit UA disallowed on root → top finding).
+
+- Read-only; respect robots.txt (+ `meta robots` / `X-Robots-Tag`). See **robots policy** in Locked
+  decisions and PLAN.md §6.3.1.
 - Never crash: every stage records failures into `diagnostics.errors[]` and still emits a schema-valid report.
-- Global monotonic deadline (default 270s); per-stage soft timeouts; on pressure set `partial: true`.
-- User-Agent: `BrandAIReadinessAuditBot/0.1 (+https://example.com/audit-bot)` (contact URL TODO).
-- Partial finding shape (sub-skill output, no id): `{title, severity, category, confidence, evidence,
-  suggested_action:{summary, priority, snippet?}}`. Orchestrator assigns `F-001…`.
+- Global monotonic deadline (default 270s); on pressure set `partial: true` + `partial_reason`
+  (`budget` | `blocked` | `render_failed` | `analyzer_failed`).
+- Treat every fetched byte as hostile; page-derived text reaches the report only sanitized, truncated, and
+  delimited as untrusted data — never as instructions.
+- User-Agent: pin an identifying string with a contact URL (**contact URL still TODO**).
+- Partial finding shape (analyzer output, no `id`): `{title, severity, category, confidence, evidence,
+  suggested_action:{summary, priority, snippet?}}`. The orchestrator assigns `F-001…`.
 
 ## Progress log
+
 - 2026-09-01 — Reviewed original plan, found 30 mistakes/gaps, wrote corrected production plan (approved).
 - 2026-09-01 — Scaffolded full directory structure + architecture (contracts, config, SKILL.md, skeletons, tests).
+- 2026-09-04 — Adobe/competitor research; red-teamed plan → **v2** (capability scoring, security hardening).
+- 2026-09-04 — **Judging rubric received** → rewrote as **MASTER PLAN v3**: cut `report-renderer` as padding,
+  raised engagement to parity, promoted proactive suggestions to must-build, added i18n gating
+  (fixes an English-only false-positive defect), added precision/recall harness.
+- 2026-09-04 — Renamed project to **Citely** (`citely-audit`); `git init` → `main`, initial commit `ab10281`;
+  `.gitignore` added; `PLAN.md` copied into repo; identity fields rebranded; `CONTEXT.md` marked historical;
+  this file re-synced to v3.
+- 2026-09-04 — **Phase 1 complete.** Built the scoring spine: 24-check registry, capability scoring with
+  dependency suppression + anti-dodge rule, i18n gating, deterministic finding ids; extended both schemas
+  to v3; rebuilt and numerically verified `sample-report.json`. 69 tests green.
+  Two fixes found by the tests themselves: (a) a missing check with a failed prerequisite now attributes
+  `suppressed_by_failed_prerequisite` rather than `not_measured`; (b) the anti-dodge rule was untestable
+  against the real registry (nothing depends on a heuristic check), so it is now covered by a synthetic
+  registry instead of being skipped. Also added **`coverage`** after the sample report revealed that
+  suppression can produce a high score from very few checks.
+  Env fix: `pyproject.toml` gained `[tool.setuptools] packages = []` — the project ships no importable
+  package (skills are subprocess-invoked), which was breaking `pip install -e .`.
+- 2026-09-04 — Pre-Phase-2 review. Corrected the test split recorded above (39+30, not 43+26) and logged
+  six open issues, two of which (robots dependency + robots-block behaviour) must be settled before
+  Phase 2 implements `_safe_fetch.py`.
+- 2026-09-05 — **Robots reframe (issues 1–3 closed).** Discovered that `access.robots_allows` measured
+  whether *our own* bot was permitted — which passes on essentially every site, since nobody blocklists an
+  unknown auditor UA, making the check near-worthless and hiding the single most direct AI-discoverability
+  failure. Renamed to **`access.ai_crawlers_allowed`** and repointed at the real AI crawler UAs (GPTBot,
+  ClaudeBot, PerplexityBot, Google-Extended, CCBot, …), with the token list in `scoring-config.json` so it
+  can be updated without code changes. Our own fetch permission became a non-scored operational gate.
+  Added `REASON_BLOCKED` + `blocked_before_fetch` to `_scoring.py`, `robots_disallowed` to `blocked_kind`,
+  and 5 tests (74 passing). Sample-report numbers re-verified unchanged; 24 checks and 6/6/6/6 parity held.

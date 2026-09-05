@@ -1,5 +1,5 @@
 {
-  "name": "brand-ai-readiness-audit",
+  "name": "citely-audit",
   "version": "0.1.0",
   "description": "Agent Skill Marketplace that audits an arbitrary website for off-site AI discoverability and on-site engagement, emitting a single evidence-backed JSON report.",
   "license": "Apache-2.0",

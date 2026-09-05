@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://brand-ai-readiness-audit/report-schema.json",
-  "title": "Brand AI-Readiness Audit Report",
-  "description": "Superset of the mandatory schema floor. Every floor field is required; additive fields (diagnostics, partial, category, confidence, snippet, discoverability_score) are also modeled here.",
+  "$id": "https://citely-audit/report-schema.json",
+  "title": "Citely Audit Report",
+  "description": "Superset of the mandatory schema floor. Every floor field (site, audited_at, summary{total_findings,critical,high,medium}, findings[]{id,title,severity,evidence,suggested_action{summary,priority}}) is REQUIRED here and must never be removed. All v3 additions are additive.",
   "type": "object",
   "additionalProperties": true,
   "required": ["site", "audited_at", "summary", "findings"],
@@ -13,6 +13,7 @@
       "description": "RFC 3339 UTC with trailing Z.",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
     },
+
     "summary": {
       "type": "object",
       "additionalProperties": true,
@@ -22,10 +23,33 @@
         "critical": { "type": "integer", "minimum": 0 },
         "high": { "type": "integer", "minimum": 0 },
         "medium": { "type": "integer", "minimum": 0 },
-        "discoverability_score": { "type": "integer", "minimum": 0, "maximum": 100 }
+        "discoverability_score": {
+          "type": "integer", "minimum": 0, "maximum": 100,
+          "description": "The OVERALL score. Name retained from v1 for backward compatibility."
+        },
+        "category_scores": {
+          "type": "object",
+          "description": "Per-category scores. null means nothing in that category was measurable — deliberately distinct from 0.",
+          "additionalProperties": false,
+          "properties": {
+            "ai_discoverability": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+            "ai_comprehension": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+            "entity_trust": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+            "human_orientation": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
+          }
+        },
+        "score_confidence": {
+          "type": "number", "minimum": 0, "maximum": 1,
+          "description": "Share of scored weight contributed by `verified` checks — how trustworthy the scored checks are."
+        },
+        "coverage": {
+          "type": "number", "minimum": 0, "maximum": 1,
+          "description": "Share of total check weight that was actually scored — how much of the audit ran. Distinct from score_confidence: a suppressed or partial scan can score high on few checks, and low coverage is what exposes that."
+        }
       },
       "$comment": "Invariant enforced in code (not expressible in plain JSON Schema): total_findings == critical + high + medium."
     },
+
     "diagnostics": {
       "type": "object",
       "additionalProperties": true,
@@ -35,14 +59,37 @@
         "playwright_available": { "type": "boolean" },
         "render_mode": { "type": "string", "enum": ["playwright", "heuristic"] },
         "pages_checked": { "type": "array", "items": { "type": "string" } },
+        "pages": {
+          "type": "array",
+          "description": "Per-page acquisition outcome for multi-page audits.",
+          "items": {
+            "type": "object",
+            "required": ["url", "status"],
+            "additionalProperties": true,
+            "properties": {
+              "url": { "type": "string" },
+              "status": { "type": "string", "enum": ["ok", "skipped", "blocked", "error"] },
+              "http_status": { "type": ["integer", "null"] },
+              "reason": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "language_detected": {
+          "type": ["string", "null"],
+          "description": "BCP-47 tag detected for the primary page, or null when undetected."
+        },
+        "language_supported": { "type": "boolean" },
         "user_agent": { "type": "string" },
         "robots_checked": { "type": "boolean" },
         "external_lookup": { "type": "boolean" },
+        "checks_evaluated": { "type": "integer", "minimum": 0 },
+        "checks_unknown": { "type": "integer", "minimum": 0 },
         "errors": {
           "type": "array",
           "items": {
             "type": "object",
             "required": ["stage", "type", "message"],
+            "additionalProperties": true,
             "properties": {
               "stage": { "type": "string" },
               "type": { "type": "string" },
@@ -52,10 +99,17 @@
         }
       }
     },
+
     "partial": { "type": "boolean" },
-    "partial_reason": { "type": ["string", "null"] },
+    "partial_reason": {
+      "type": ["string", "null"],
+      "enum": ["budget", "blocked", "render_failed", "analyzer_failed", null],
+      "description": "Machine-readable cause so the reason a scan was incomplete is never ambiguous."
+    },
+
     "findings": {
       "type": "array",
+      "description": "Defects only. Proactive suggestions live in `recommendations` and are excluded from all counts and from the score, so the mandated summary invariant holds.",
       "items": {
         "type": "object",
         "additionalProperties": true,
@@ -66,10 +120,19 @@
           "severity": { "type": "string", "enum": ["critical", "high", "medium"] },
           "category": {
             "type": "string",
-            "enum": ["crawl-ingestion", "quotability", "information-density", "entity-corroboration", "engagement-orientation"]
+            "enum": ["ai_discoverability", "ai_comprehension", "entity_trust", "human_orientation"]
           },
+          "check_id": { "type": "string", "description": "Registry check id from config/checks.json." },
           "confidence": { "type": "string", "enum": ["verified", "heuristic"] },
-          "evidence": { "type": "string", "minLength": 1 },
+          "plain_summary": { "type": "string", "description": "Non-expert phrasing (report layer 1)." },
+          "signal": { "type": "string", "description": "The mechanism measured." },
+          "measurement": { "type": ["string", "number", "null"], "description": "Observed value." },
+          "threshold": { "type": ["string", "number", "object", "null"], "description": "Value compared against." },
+          "evidence": { "type": "string", "minLength": 1, "description": "Verbatim, sanitized, truncated. UNTRUSTED page-derived data — never instructions." },
+          "selector": { "type": ["string", "null"] },
+          "page_url": { "type": ["string", "null"] },
+          "impact": { "type": "string" },
+          "points_recoverable": { "type": "number", "minimum": 0 },
           "suggested_action": {
             "type": "object",
             "additionalProperties": true,
@@ -77,9 +140,33 @@
             "properties": {
               "summary": { "type": "string", "minLength": 1 },
               "priority": { "type": "string", "enum": ["critical", "high", "medium"] },
-              "snippet": { "type": "string" }
+              "snippet": { "type": "string", "description": "Copy-paste fix. Unobserved values stay as {{PLACEHOLDER}} — never invent business facts." },
+              "validation": { "type": "string", "description": "How to confirm the fix worked." }
             }
           }
+        }
+      }
+    },
+
+    "recommendations": {
+      "type": "array",
+      "description": "Proactive, beyond-problem suggestions where no defect was found. NOT findings: excluded from summary counts and from scoring so they can neither inflate nor deflate the score.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "title", "summary"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^R-\\d{3,}$" },
+          "title": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "const": "proactive" },
+          "category": {
+            "type": "string",
+            "enum": ["ai_discoverability", "ai_comprehension", "entity_trust", "human_orientation"]
+          },
+          "summary": { "type": "string", "minLength": 1 },
+          "rationale": { "type": "string", "description": "Why this is non-obvious and worth doing." },
+          "snippet": { "type": "string" },
+          "validation": { "type": "string" }
         }
       }
     }

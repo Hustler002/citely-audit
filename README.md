@@ -1,4 +1,4 @@
-# Brand AI-Readiness Audit
+# Citely — Brand AI-Readiness Audit
 
 An Agent Skill Marketplace (`agentskills.io`-compliant) that audits an arbitrary website and
 diagnoses two things: **off-site AI discoverability** (why AI assistants fail to crawl, extract,
