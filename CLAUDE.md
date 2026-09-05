@@ -86,11 +86,19 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 - Base spec has **no** `marketplace.json` / `entrypoint` concept — bespoke to this brief.
 - Official validator: `skills-ref validate ./<skill>` (github.com/agentskills/agentskills).
 
-## Current status: PHASE 4 COMPLETE — two of four categories now produce real verdicts
+## Current status: PHASE 5 COMPLETE — all 24 checks implemented, all four categories score
 
-**299 tests, 13 skipped.** The pipeline fetches, selects pages, renders in real Chromium, emits a
-validated artifact, and **12 of the 24 checks now return real verdicts** (AI Discoverability +
-Entity Trust). Analyzer output is verified to feed the scoring engine and produce sensible scores.
+**349 tests, 13 skipped.** All **24 of 24 checks are implemented** across four analyzers, and the
+full four-category score is produced end-to-end.
+
+Verified on a live Tier-A render against the fixture server:
+| Page | Overall | Coverage | States |
+|---|---|---|---|
+| healthy (SSR) | 98.8 | 0.975 | 22 pass / 1 partial |
+| SPA shell | 85.3 | **0.23** | 4 pass / 1 fail / 19 unknown |
+
+The SPA row is the model working as designed: one root cause suppresses 19 checks, so the headline
+85.3 is honest only because coverage 0.23 sits beside it.
 
 **Chromium IS provisioned**; Tier-A rendering verified end-to-end.
 
@@ -110,8 +118,8 @@ Run tests with `./.venv/Scripts/python.exe -m pytest`.
 | 2 | Safe acquisition (`_safe_fetch.py`, SSRF, robots) + security corpus | ✅ **DONE** |
 | 3 | Artifact pipeline (`_page_select.py`, `_render.py` Tier A/B) | ✅ **DONE** |
 | 4 | Structural analyzers (crawl/render/extraction, entity) | ✅ **DONE** |
-| 5 | Parity analyzers + i18n (engagement, quotability) | next |
-| 6 | Orchestration & report assembly | |
+| 5 | Parity analyzers + i18n (engagement, quotability) | ✅ **DONE** |
+| 6 | Orchestration & report assembly | next |
 | 7 | `remediation-advisor` (6th skill) + proactive suggestions | |
 | 8 | Non-expert output layer + `render_html.py` | |
 | 9 | `labeled_corpus.json` + precision/recall + archetype fixtures | |
@@ -148,6 +156,7 @@ Run tests with `./.venv/Scripts/python.exe -m pytest`.
 | 5 | **Disk headroom is thin** — ~738 MB free. Phase 3 needs ~150 MB for Chromium; the drive already hit 100% once during setup. | Medium | Monitor |
 | 6 | Chromium not provisioned | Low | ✅ **RESOLVED** — installed, Tier A verified |
 | 9 | **Content-type was unenforced** (PLAN §10), **timeouts duplicated** across `budgets`/`fetch`/`render`, **global deadline unwired**, size cap gap, undeclared artifact fields, 3 dead config keys, dead code, stale role enum. | High→Low | ✅ **ALL 8 RESOLVED 2026-09-05** |
+| 10 | **A category can score 100 from a single measurable check.** On the SPA fixture, Human Orientation reads 100.0 because 5 of its 6 checks were suppressed and only `viewport_meta` remained. Overall `coverage` (0.23) exposes this, but a per-CATEGORY coverage figure would stop a category headline being read as a clean bill of health. Relevant to the rubric's output-design criterion. | Medium | Decide in Phase 6/8 |
 | 8 | **Browser relaunched per page.** `render_page` launches Chromium for every page (~3-4 s of the ~5 s per-page cost). At 5 pages that is ~25 s of the 270 s budget — acceptable now, but reusing one browser across pages is the obvious win if the budget ever tightens. | Low | Optimize if needed |
 
 | 7 | **`allow_private_hosts` is a live SSRF bypass switch.** Default false and test-only, but if it were ever set true in a real run the guard is fully disabled. Phase 3 must pass it only from test fixtures, never from CLI input. | Medium | Guard in Phase 3 |
@@ -200,12 +209,28 @@ Run tests with `./.venv/Scripts/python.exe -m pytest`.
 - [x] `tests/test_analyzers.py` — 57 tests incl. subprocess contract, adversarial injection,
       malformed HTML, and integration into the scoring engine.
 
+### Phase 5 delivered
+- [x] `quotability-density-audit` — 6 AI Comprehension checks (title, meta description, heading
+      hierarchy, scannable blocks, quotability, density).
+- [x] `engagement-orientation-audit` — 6 Human Orientation checks, with a **two-tier measurement**
+      strategy mirroring the render tiers: real geometry (pixel offsets, computed font size, overlay
+      coverage) captured during a Tier-A render, falling back to a DOM-order proxy in Tier B and
+      saying so in `reason`. Legibility resolves to `unknown` without a browser rather than guessing.
+- [x] `_render.py` now captures `geometry` (headings/interactive tops, body font px, overlays,
+      above-fold text); declared in the artifact schema.
+- [x] **i18n gating built in from the start**: 3 of 12 new checks are language-dependent and resolve
+      to `unknown` on an unsupported/undetected language. `--html-file` mode detects `<html lang>`
+      locally so standalone runs still work.
+- [x] `tests/fixtures/non_english_page.html` — a structurally excellent German page. Tests assert it
+      passes every language-independent check and never *fails* a language-gated one.
+- [x] `tests/test_analyzers_phase5.py` — 50 tests.
+
 ### Not yet done — implementation order (PLAN.md §14)
 - [x] ~~**2.** `_safe_fetch.py` + security corpus.~~ **DONE**
 - [ ] **3.** Artifact assembly, `_page_select.py` (sitemap → homepage fallback), `_render.py` (Tier A/B);
       fixture server routes (robots, sitemap, redirect, bomb).
 - [x] ~~**4.** structural analyzers~~ **DONE**
-- [ ] **5.** `engagement-orientation-audit` + `quotability-density-audit` **at parity**, i18n gating built in.
+- [x] ~~**5.** parity analyzers + i18n~~ **DONE**
 - [ ] **6.** Orchestrator wiring → schema-valid JSON report.
 - [ ] **7.** `remediation-advisor` skill (**new, 6th**) incl. non-obvious proactive suggestions.
 - [ ] **8.** Non-expert output layer + `render_html.py` (folded in — `report-renderer` was cut as padding).
@@ -330,3 +355,19 @@ Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`.
   source files — only that one was affected. Added `test_no_control_characters_in_source` so it
   cannot recur, plus a test proving the `` backreference still distinguishes an empty mount node
   from a populated one.
+- 2026-09-06 — **Phase 5 complete.** Both parity analyzers built; all 24 checks now implemented.
+  **Two real defects found by running the analyzers, both in the value-proposition check:**
+    1. FALSE POSITIVE — the SPA shell scored a signal because "enable JavaScript to run this app"
+       matched the offering-noun "app". Added a minimum-text floor.
+    2. **GAMEABILITY** — the injection test proved that simply appending a paragraph flipped the
+       verdict fail -> pass, because the check scored keywords anywhere above the fold. That
+       violates PLAN §6.2 ("adding filler text changes nothing"). Rewritten to score only the
+       PROMINENT area (topmost heading + the paragraph after it); a page with no headline now fails
+       regardless of how much text is added.
+  Also corrected the healthy fixture, which was missing `meta viewport` and `meta description` and
+  so was not actually healthy.
+  **Two test-design errors of my own**: the injection tests compared pages whose content genuinely
+  differed, so they measured content change rather than injection resistance. Reformulated to assert
+  the property that matters — injected instructions must never *improve* a verdict.
+  A heredoc again wrote literal null bytes into a source file (second occurrence); caught by the
+  Phase 4 guard test. Heredocs are no longer used for content containing escapes.

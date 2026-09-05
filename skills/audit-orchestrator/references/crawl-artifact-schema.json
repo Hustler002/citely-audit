@@ -235,6 +235,66 @@
                     "type": "integer"
                   }
                 }
+              },
+              "heuristic_signals": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Browserless SPA evidence (empty mount node, framework markers, script-to-text ratio)."
+              },
+              "geometry": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Layout facts captured during a Tier-A render, which HTML alone cannot provide. Absent in Tier B, where engagement checks fall back to a DOM-order proxy and are labelled heuristic.",
+                "properties": {
+                  "viewport_height": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "viewport_width": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "body_font_px": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Computed font-size of body."
+                  },
+                  "above_fold_text_chars": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "headings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "interactive": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "description": "Anchors/buttons with their absolute top offset."
+                  },
+                  "overlays": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "description": "Fixed/sticky elements covering >40% of the viewport."
+                  }
+                }
               }
             }
           },

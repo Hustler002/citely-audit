@@ -197,7 +197,10 @@
       ],
       "requires_language": false,
       "threshold": {
-        "min_blocks": 1
+        "min_blocks": 1,
+        "min_items_per_block": 2,
+        "short_page_chars": 1000,
+        "_note": "A page with no lists or tables is only failed when it is long enough that structure would clearly help; short prose pages get `partial`, not `fail`."
       },
       "title": "Facts presented in scannable blocks",
       "signal": "Presence of lists, tables or definition lists carrying factual content",
@@ -216,7 +219,31 @@
       ],
       "requires_language": true,
       "threshold": {
-        "min_quotable_sentences": 3
+        "min_quotable_sentences": 3,
+        "min_sentence_chars": 40,
+        "max_sentence_chars": 300,
+        "min_words": 6,
+        "_language": "en — applied ONLY when the page declares a supported language (requires_language=true); otherwise the check is `unknown`, never `fail`.",
+        "dangling_openers": [
+          "it",
+          "this",
+          "that",
+          "they",
+          "these",
+          "those",
+          "he",
+          "she",
+          "but",
+          "and",
+          "however",
+          "also",
+          "therefore",
+          "thus",
+          "so",
+          "which",
+          "who",
+          "there"
+        ]
       },
       "title": "Self-contained, quotable factual statements",
       "signal": "Count of sentences that state a complete fact without needing surrounding context",
@@ -236,7 +263,21 @@
       "requires_language": true,
       "threshold": {
         "min_ratio": 0.25,
-        "long_page_word_count": 2000
+        "long_page_word_count": 2000,
+        "_language": "en — gated by requires_language.",
+        "filler_tokens": [
+          "best-in-class",
+          "world-class",
+          "cutting-edge",
+          "synergy",
+          "innovative",
+          "leading",
+          "seamless",
+          "revolutionary",
+          "next-generation",
+          "game-changing",
+          "state-of-the-art"
+        ]
       },
       "title": "Information density survives summarization",
       "signal": "Ratio of concrete factual sentences to total sentences, weighted by page length",
@@ -383,7 +424,9 @@
       ],
       "requires_language": false,
       "threshold": {
-        "first_viewport_px": 800
+        "first_viewport_px": 800,
+        "dom_proxy_chars": 2500,
+        "_note": "Tier A uses real pixel offsets. Tier B falls back to a DOM-order proxy: an element appearing within the first dom_proxy_chars of <body> is treated as above the fold, and the verdict is labelled heuristic."
       },
       "title": "A heading appears in the first viewport",
       "signal": "Presence of an h1 or hero heading within the first viewport height",
@@ -402,7 +445,8 @@
       ],
       "requires_language": false,
       "threshold": {
-        "first_viewport_px": 800
+        "first_viewport_px": 800,
+        "dom_proxy_chars": 2500
       },
       "title": "A primary action is available above the fold",
       "signal": "An anchor or button element positioned within the first viewport",
@@ -420,7 +464,10 @@
         "render.content_without_js"
       ],
       "requires_language": false,
-      "threshold": null,
+      "threshold": {
+        "max_overlay_coverage": 0.4,
+        "_note": "Overlay coverage comes from Tier-A geometry (fixed/sticky elements). A page already flagged as a consent wall or bot challenge fails here too."
+      },
       "title": "First-paint content is not obstructed",
       "signal": "Full-viewport overlays, modals or consent interstitials covering initial content",
       "impact": "An interstitial covering the first screen hides the very answer the visitor arrived for.",
@@ -456,7 +503,68 @@
       "requires_language": true,
       "threshold": {
         "first_viewport_px": 800,
-        "min_signal_score": 1
+        "min_signal_score": 1,
+        "_language": "en — gated by requires_language. A non-English hero section must never be judged with English vocabulary.",
+        "action_verbs": [
+          "analyse",
+          "analyze",
+          "audit",
+          "automate",
+          "book",
+          "bring",
+          "build",
+          "builds",
+          "connect",
+          "create",
+          "deliver",
+          "design",
+          "discover",
+          "enable",
+          "find",
+          "get",
+          "give",
+          "grow",
+          "help",
+          "helps",
+          "learn",
+          "let",
+          "make",
+          "makes",
+          "manage",
+          "monitor",
+          "power",
+          "protect",
+          "provide",
+          "run",
+          "save",
+          "sell",
+          "simplify",
+          "track",
+          "turn",
+          "turns"
+        ],
+        "offering_nouns": [
+          "platform",
+          "software",
+          "tool",
+          "service",
+          "app",
+          "solution",
+          "agency",
+          "studio",
+          "shop",
+          "store",
+          "team",
+          "api",
+          "dashboard",
+          "course",
+          "clinic",
+          "restaurant",
+          "consultancy",
+          "product"
+        ],
+        "min_text_chars": 80,
+        "_min_text_note": "Below this much above-the-fold text there is nothing that could constitute a value proposition, so the check fails outright rather than scoring an incidental keyword match (a 'Loading...' shell was matching the offering-noun 'app')."
       },
       "title": "A value proposition is stated above the fold",
       "signal": "Above-the-fold text evaluated for an action plus an offering",
@@ -475,7 +583,8 @@
       ],
       "requires_language": false,
       "threshold": {
-        "min_body_font_px": 14
+        "min_body_font_px": 14,
+        "_note": "Requires a real computed font size from a Tier-A render. Without geometry this resolves to `unknown` — guessing from inline styles would be unreliable."
       },
       "title": "Body text is legible",
       "signal": "Computed or declared body font size",

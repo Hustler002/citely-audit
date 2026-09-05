@@ -42,7 +42,81 @@ class RenderResult:
     console_errors: list = field(default_factory=list)
     viewport: dict = field(default_factory=dict)
     heuristic_signals: dict = field(default_factory=dict)
+    geometry: dict = field(default_factory=dict)
     error: str | None = None
+
+
+# Layout facts HTML alone cannot answer: what is genuinely above the fold, how large body text
+# actually renders, and whether an overlay covers first-paint content. Collected only in Tier A —
+# without it the engagement analyzer falls back to a DOM-order proxy and labels itself heuristic.
+GEOMETRY_JS = """
+() => {
+  const out = {viewport_height: window.innerHeight, viewport_width: window.innerWidth,
+               body_font_px: null, headings: [], interactive: [], overlays: [],
+               above_fold_text_chars: 0, above_fold_text: ''};
+  const px = v => { const n = parseFloat(v); return isFinite(n) ? n : null; };
+  const topOf = el => {
+    try { const r = el.getBoundingClientRect(); return Math.round(r.top + window.scrollY); }
+    catch (e) { return null; }
+  };
+  try { out.body_font_px = px(getComputedStyle(document.body).fontSize); } catch (e) {}
+
+  const take = (selector, bucket, limit) => {
+    let nodes = [];
+    try { nodes = Array.from(document.querySelectorAll(selector)).slice(0, limit); } catch (e) { return; }
+    for (const el of nodes) {
+      let text = '';
+      try { text = (el.innerText || el.textContent || '').trim().slice(0, 160); } catch (e) {}
+      let fs = null;
+      try { fs = px(getComputedStyle(el).fontSize); } catch (e) {}
+      out[bucket].push({tag: el.tagName.toLowerCase(), top: topOf(el), text: text, font_px: fs});
+    }
+  };
+  take('h1,h2,h3', 'headings', 40);
+  take('a[href],button,input[type=submit]', 'interactive', 120);
+
+  // Overlays: fixed/sticky elements blanketing the first screen (consent walls, modals).
+  try {
+    for (const el of Array.from(document.body.querySelectorAll('*')).slice(0, 3000)) {
+      const cs = getComputedStyle(el);
+      if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+      if (cs.display === 'none' || cs.visibility === 'hidden' || px(cs.opacity) === 0) continue;
+      const r = el.getBoundingClientRect();
+      const cover = (r.width * r.height) / (window.innerWidth * window.innerHeight);
+      if (cover > 0.4) {
+        out.overlays.push({tag: el.tagName.toLowerCase(),
+                           coverage: Math.round(cover * 100) / 100, top: Math.round(r.top)});
+        if (out.overlays.length >= 5) break;
+      }
+    }
+  } catch (e) {}
+
+  // Text that actually renders within the first viewport.
+  try {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let total = 0, seen = 0;
+    const parts = [];
+    while (walker.nextNode() && seen < 4000) {
+      seen++;
+      const node = walker.currentNode;
+      const value = (node.nodeValue || '').trim();
+      if (!value) continue;
+      const parent = node.parentElement;
+      if (!parent) continue;
+      const t = topOf(parent);
+      if (t !== null && t < window.innerHeight) {
+        total += value.length;
+        if (parts.length < 200) parts.push(value);
+      }
+    }
+    out.above_fold_text_chars = total;
+    // Capped sample so the value-proposition check can read what a visitor actually sees first.
+    out.above_fold_text = parts.join(' ').slice(0, 2000);
+  } catch (e) {}
+
+  return out;
+}
+"""
 
 
 # --- Text extraction --------------------------------------------------------------------------
@@ -180,6 +254,14 @@ def render_with_browser(url: str, config: dict, *, deadline: float | None = None
                 page.wait_for_timeout(min(settle_ms, max_render_ms))
                 result.html = page.content()
                 result.console_errors = errors
+
+                # Geometry is best-effort: a page that blocks evaluation must not fail the render.
+                try:
+                    result.geometry = page.evaluate(GEOMETRY_JS) or {}
+                except Exception as exc:
+                    log.warning("geometry capture failed for %s: %s", url, exc)
+                    result.geometry = {}
+
                 result.available = True
             finally:
                 # Hard close so a hung page cannot leak a browser process past the audit.
