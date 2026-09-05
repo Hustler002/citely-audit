@@ -28,8 +28,9 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 ## Repository state (verified)
 
 - **Path / git root:** `C:\Users\PRIYANSHU PAL\Desktop\ADOBE\citely-audit`
-- **Branch:** `main` · **Commits:** `ab10281 Initial project structure` (30 files tracked)
-- `.gitignore` present. `PLAN.md` added to the repo (untracked at time of writing).
+- **Branch:** `main` · **Commits:** 3, latest `f2aa690 Add tests for SPA detection and security measures`
+  (41 files tracked, as of 2026-09-06). Phase 4 work is uncommitted.
+- `.gitignore` present; `PLAN.md` is tracked.
 - Project renamed `brand-ai-readiness-audit` → **`citely-audit`**. Identity fields rebranded;
   **skill folder names deliberately unchanged** (descriptive + agentskills.io-valid).
 
@@ -67,8 +68,13 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
   and prompt-injection resistance.
 - **i18n gating:** language-dependent checks return `unknown` (never `fail`) when page language is
   undetected/unsupported. Prevents mass false positives on non-English sites.
-- Each skill is a self-contained folder → scripts embed their own config defaults rather than importing a
-  shared module; drift is caught by tests.
+- Each skill is a self-contained folder (agentskills.io) → helpers and default thresholds are
+  **duplicated across skills by design**, never shared by import. Drift is caught by explicit tests
+  in `tests/test_analyzers.py` (`test_spa_markers_match_config`, `test_embedded_thresholds_match_registry`,
+  `test_sanitize_behaves_identically_across_skills`, …), NOT merely asserted.
+- **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
+  `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
+  Contract: `references/check-result-schema.json`.
 
 ## Verified spec facts (agentskills.io)
 
@@ -80,17 +86,20 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 - Base spec has **no** `marketplace.json` / `entrypoint` concept — bespoke to this brief.
 - Official validator: `skills-ref validate ./<skill>` (github.com/agentskills/agentskills).
 
-## Current status: PHASE 3 COMPLETE — acquisition pipeline produces a validated artifact
+## Current status: PHASE 4 COMPLETE — two of four categories now produce real verdicts
 
-Scoring, schemas, safe fetch, page selection, tiered rendering and artifact assembly are **done and
-green (211 tests, 13 skipped)**. The pipeline can now fetch a site, pick pages, render them in real
-Chromium and emit a schema-valid crawl artifact. The four **analyzers are still `TODO` skeletons**
-(the 13 skips), so no findings or report are produced yet.
+**299 tests, 13 skipped.** The pipeline fetches, selects pages, renders in real Chromium, emits a
+validated artifact, and **12 of the 24 checks now return real verdicts** (AI Discoverability +
+Entity Trust). Analyzer output is verified to feed the scoring engine and produce sensible scores.
 
-**Chromium IS provisioned** and Tier-A rendering is verified end-to-end.
+**Chromium IS provisioned**; Tier-A rendering verified end-to-end.
+
+Still missing: the other two analyzers (Phase 5) and orchestrator wiring (Phase 6). The entrypoint
+`run_audit.py` still returns `{"_status": "not_implemented"}`, so **there is no runnable report yet**.
+The 13 skips are the two unimplemented analyzers' stub files.
 
 **Environment:** `.venv/` created, all pinned deps installed (`pytest`, `jsonschema`, `lxml`,
-`beautifulsoup4`, `playwright`, `requests`). Chromium browsers NOT yet provisioned (Phase 3).
+`beautifulsoup4`, `playwright`, `requests`) **and Chromium provisioned**.
 Run tests with `./.venv/Scripts/python.exe -m pytest`.
 **Disk note:** ~1.6 GB free after the Chromium install.
 
@@ -100,8 +109,8 @@ Run tests with `./.venv/Scripts/python.exe -m pytest`.
 | 1 | Scoring spine & schema contracts | ✅ **DONE** |
 | 2 | Safe acquisition (`_safe_fetch.py`, SSRF, robots) + security corpus | ✅ **DONE** |
 | 3 | Artifact pipeline (`_page_select.py`, `_render.py` Tier A/B) | ✅ **DONE** |
-| 4 | Structural analyzers (crawl/render/extraction, entity) | next |
-| 5 | Parity analyzers + i18n (engagement, quotability) | |
+| 4 | Structural analyzers (crawl/render/extraction, entity) | ✅ **DONE** |
+| 5 | Parity analyzers + i18n (engagement, quotability) | next |
 | 6 | Orchestration & report assembly | |
 | 7 | `remediation-advisor` (6th skill) + proactive suggestions | |
 | 8 | Non-expert output layer + `render_html.py` | |
@@ -178,11 +187,24 @@ Run tests with `./.venv/Scripts/python.exe -m pytest`.
 - [x] `tests/test_artifact.py` — 70 tests. Verified end-to-end: hydrating SPA raw 55 -> rendered 510
       chars (+455); server-rendered control shows +0 and is correctly not flagged.
 
+### Phase 4 delivered
+- [x] **Analyzer wire format decided**: analyzers emit **check states**, not findings (PLAN §6.1
+      "Checks, not findings, are the unit"). The old skeleton docstrings said "partial findings" —
+      stale, now corrected. Report wording stays in `checks.json` as one source of truth.
+- [x] `references/check-result-schema.json` — the third cross-process contract, now pinned.
+- [x] `crawl-render-extraction-audit` — all 6 AI Discoverability checks.
+- [x] `entity-corroboration-audit` — all 6 Entity Trust checks. Accepts entity evidence from ANY
+      page (markup legitimately lives on /about), prefers the rendered DOM (tag managers inject
+      JSON-LD), handles `@graph`, and treats structured data as claims with size/depth caps.
+- [x] Both keep `--html-file` offline mode, so each skill is independently runnable.
+- [x] `tests/test_analyzers.py` — 57 tests incl. subprocess contract, adversarial injection,
+      malformed HTML, and integration into the scoring engine.
+
 ### Not yet done — implementation order (PLAN.md §14)
 - [x] ~~**2.** `_safe_fetch.py` + security corpus.~~ **DONE**
 - [ ] **3.** Artifact assembly, `_page_select.py` (sitemap → homepage fallback), `_render.py` (Tier A/B);
       fixture server routes (robots, sitemap, redirect, bomb).
-- [ ] **4.** `crawl-render-extraction-audit` + `entity-corroboration-audit` (structural checks first).
+- [x] ~~**4.** structural analyzers~~ **DONE**
 - [ ] **5.** `engagement-orientation-audit` + `quotability-density-audit` **at parity**, i18n gating built in.
 - [ ] **6.** Orchestrator wiring → schema-valid JSON report.
 - [ ] **7.** `remediation-advisor` skill (**new, 6th**) incl. non-obvious proactive suggestions.
@@ -283,3 +305,28 @@ Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`.
   and `budgets.global_deadline_s` was read by nothing. All 8 fixed with regression tests.
   **My first content-type fix was inert and the full 211-test suite stayed green** — only an explicit
   end-to-end probe caught it. Behaviour is now asserted, not assumed.
+- 2026-09-05 — **Phase 4 complete.** Implemented the two structural analyzers (12 of 24 checks).
+  Resolved a contract contradiction first: PLAN §6.1 says checks are the unit, but the scaffold's
+  docstrings said "partial findings" — settled on **check states**, so report wording never drifts.
+  **Three false positives found and fixed during development**, all of the same family — the
+  render check conflating "needs JavaScript" with "page is short":
+    1. The healthy fixture (461 chars, fully server-rendered) was flagged `partial`.
+    2. After a first fix, an 80-char but genuine local-business page still failed, because the
+       `empty_floor_chars` floor was 100. Lowered to 50 — thin content is the density check's job.
+    3. The analyzer could only see SPA markers via `rendered.heuristic_signals`, so in `--html-file`
+       mode it was **blind to SPA shells entirely**. It now detects them from raw HTML itself,
+       which is also correct for self-contained skills.
+  Also rebalanced an adversarial test that was accidentally measuring page length rather than
+  injection resistance.
+- 2026-09-06 — Pre-Phase-5 audit: synced this file (commit/tracking state was stale) and fixed 4 issues.
+  **SPA markers were duplicated** between `scoring-config.json` and hardcoded constants in the crawl
+  analyzer — the third instance of the same drift-hazard family in this project. Markers are now read
+  from config, with the embedded fallback pinned by a test. Added the drift tests that make this
+  file's "drift is caught by tests" claim actually true, registered `check-result-schema.json` in
+  PLAN §12, and removed two dead `CATEGORY` constants.
+  **Found and repaired real source corruption**: an earlier heredoc edit interpreted `` and ``
+  as escape sequences and wrote raw 0x08/0x01 control bytes into a regex, silently disabling
+  empty-mount detection (masked because the framework-marker path still matched). Scanned all 28
+  source files — only that one was affected. Added `test_no_control_characters_in_source` so it
+  cannot recur, plus a test proving the `` backreference still distinguishes an empty mount node
+  from a populated one.

@@ -404,7 +404,9 @@ citely-audit/                     # git root — branch master, no commits yet, 
 ├── skills/
 │   ├── audit-orchestrator/       # entrypoint
 │   │   ├── scripts/{run_audit,_safe_fetch,_render,_page_select,_scoring,render_html}.py
-│   │   └── references/{report-schema,crawl-artifact-schema,checks-reference,severity-rubric,sample-report}.*
+│   │   └── references/{report-schema,crawl-artifact-schema,check-result-schema,checks-reference,severity-rubric,sample-report}.*
+│   │       # check-result-schema.json = the THIRD cross-process contract: what analyzers print
+│   │       # (check states, not findings — §6.1). Added in Phase 4.
 │   ├── crawl-render-extraction-audit/   ├── quotability-density-audit/
 │   ├── entity-corroboration-audit/      ├── engagement-orientation-audit/
 │   └── remediation-advisor/      # scripts/advise.py + references/remediation-templates/

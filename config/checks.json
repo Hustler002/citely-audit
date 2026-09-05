@@ -1,7 +1,6 @@
 {
   "version": "1.0.0",
   "_note": "Check registry — the single source of truth for what Citely measures. Analyzers emit a state per check id; _scoring.py turns states into scores. Thresholds live HERE (not in analyzer code) so they are auditable and tunable in one place. 24 checks, 6 per category: engagement sits at exact parity with discoverability, per the rubric's 'across both discoverability and engagement'.",
-
   "_field_reference": {
     "id": "Stable identifier. Never reuse or renumber — findings and tests reference it.",
     "category": "One of the four scoring categories.",
@@ -17,7 +16,6 @@
     "impact": "Why it matters for AI ingestion or human retention.",
     "plain_summary": "Non-expert phrasing for the report's layer-1 verdict."
   },
-
   "checks": [
     {
       "id": "access.http_ok",
@@ -43,7 +41,10 @@
       "kind": "structural",
       "depends_on": [],
       "requires_language": false,
-      "threshold": { "crawlers": "config/scoring-config.json -> robots.ai_crawlers", "fail_if_any_blocked": true },
+      "threshold": {
+        "crawlers": "config/scoring-config.json -> robots.ai_crawlers",
+        "fail_if_any_blocked": true
+      },
       "title": "robots.txt permits the AI assistants' crawlers",
       "signal": "robots.txt directives evaluated for each major AI crawler user-agent (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot, OAI-SearchBot) on the target path",
       "impact": "This is the single most direct way to be invisible to AI assistants. A site can be fully crawlable by search engines yet block GPTBot, in which case ChatGPT can never read or cite it. The block is often a CDN or platform default the site owner never consciously chose.",
@@ -57,7 +58,9 @@
       "severity": "high",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["access.http_ok"],
+      "depends_on": [
+        "access.http_ok"
+      ],
       "requires_language": false,
       "threshold": null,
       "title": "Page is not marked noindex",
@@ -72,9 +75,15 @@
       "severity": "critical",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["access.http_ok"],
+      "depends_on": [
+        "access.http_ok"
+      ],
       "requires_language": false,
-      "threshold": { "min_visible_chars_raw": 500 },
+      "threshold": {
+        "min_visible_chars_raw": 500,
+        "empty_floor_chars": 50,
+        "_note": "This check measures JS-DEPENDENCE, not thinness. Above min_visible_chars_raw the page passes outright. Below it, we only fail when there is positive evidence that JavaScript is responsible (empty mount node, framework markers, or a large render gain) or when the page is below empty_floor_chars (50) and therefore effectively blank. The floor is deliberately low: a small-but-real page (a local business homepage of ~80 characters) is thin, not JavaScript-dependent, and flagging it here would be a false positive. A short but genuinely server-rendered page is NOT a rendering defect — sparse content is judged by the information-density check instead."
+      },
       "title": "Meaningful content exists without JavaScript",
       "signal": "Visible text length in the raw (pre-JavaScript) HTML response",
       "impact": "Crawlers that do not execute JavaScript see an empty shell. Facts that only appear after hydration are invisible to them, so nothing is quotable or citable.",
@@ -87,7 +96,9 @@
       "severity": "medium",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
       "threshold": null,
       "title": "Semantic HTML landmarks present",
@@ -102,15 +113,19 @@
       "severity": "high",
       "confidence_class": "heuristic",
       "kind": "statistical",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
-      "threshold": { "max_image_only_fact_ratio": 0.5, "min_images_to_evaluate": 3 },
+      "threshold": {
+        "max_image_only_fact_ratio": 0.5,
+        "min_images_to_evaluate": 3
+      },
       "title": "Key facts are not locked inside images",
       "signal": "Ratio of images carrying apparent factual content (numbers, claims) with no equivalent text or alt",
       "impact": "Text baked into images, SVG or canvas cannot be parsed into embeddings, so those facts are unavailable for citation even though a human can read them.",
       "plain_summary": "Your important facts are written as text, not trapped in pictures."
     },
-
     {
       "id": "content.title_descriptive",
       "category": "ai_comprehension",
@@ -118,9 +133,14 @@
       "severity": "high",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
-      "threshold": { "min_chars": 15, "max_chars": 70 },
+      "threshold": {
+        "min_chars": 15,
+        "max_chars": 70
+      },
       "title": "Descriptive page title",
       "signal": "Length and presence of the document title element",
       "impact": "The title is the strongest single hint an AI summarizer uses to decide what a page is about.",
@@ -133,9 +153,14 @@
       "severity": "medium",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
-      "threshold": { "min_chars": 50, "max_chars": 160 },
+      "threshold": {
+        "min_chars": 50,
+        "max_chars": 160
+      },
       "title": "Meta description present and usable",
       "signal": "Presence and length of meta name=description",
       "impact": "Provides a ready-made summary that answer engines frequently reuse verbatim.",
@@ -148,9 +173,13 @@
       "severity": "medium",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
-      "threshold": { "max_level_skip": 1 },
+      "threshold": {
+        "max_level_skip": 1
+      },
       "title": "Logical heading hierarchy",
       "signal": "Heading level sequence (h1 to h6) checked for skipped levels and multiple h1s",
       "impact": "Headings define the document outline summarizers use to decide which sections survive condensation.",
@@ -163,9 +192,13 @@
       "severity": "medium",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
-      "threshold": { "min_blocks": 1 },
+      "threshold": {
+        "min_blocks": 1
+      },
       "title": "Facts presented in scannable blocks",
       "signal": "Presence of lists, tables or definition lists carrying factual content",
       "impact": "Structured blocks are extracted far more reliably than the same facts buried in prose paragraphs.",
@@ -178,9 +211,13 @@
       "severity": "high",
       "confidence_class": "heuristic",
       "kind": "statistical",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": true,
-      "threshold": { "min_quotable_sentences": 3 },
+      "threshold": {
+        "min_quotable_sentences": 3
+      },
       "title": "Self-contained, quotable factual statements",
       "signal": "Count of sentences that state a complete fact without needing surrounding context",
       "impact": "Retrieval systems cite sentences that stand alone. Statements that depend on the previous paragraph get dropped.",
@@ -193,15 +230,19 @@
       "severity": "high",
       "confidence_class": "heuristic",
       "kind": "statistical",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": true,
-      "threshold": { "min_ratio": 0.25, "long_page_word_count": 2000 },
+      "threshold": {
+        "min_ratio": 0.25,
+        "long_page_word_count": 2000
+      },
       "title": "Information density survives summarization",
       "signal": "Ratio of concrete factual sentences to total sentences, weighted by page length",
       "impact": "When a summarizer condenses a long page, low-density facts surrounded by filler are the first thing discarded.",
       "plain_summary": "Your key facts are not diluted by filler text."
     },
-
     {
       "id": "entity.structured_data_present",
       "category": "entity_trust",
@@ -209,7 +250,9 @@
       "severity": "critical",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
       "threshold": null,
       "title": "Structured data is present",
@@ -224,9 +267,19 @@
       "severity": "critical",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["entity.structured_data_present"],
+      "depends_on": [
+        "entity.structured_data_present"
+      ],
       "requires_language": false,
-      "threshold": { "accepted_types": ["Organization", "Person", "LocalBusiness", "Corporation", "NGO"] },
+      "threshold": {
+        "accepted_types": [
+          "Organization",
+          "Person",
+          "LocalBusiness",
+          "Corporation",
+          "NGO"
+        ]
+      },
       "title": "An organization or person entity is declared",
       "signal": "A schema.org entity of an accepted identity type in the structured data graph",
       "impact": "This is the anchor that tells an AI who the page is about. Without it the brand has no declared identity to attach facts to.",
@@ -239,9 +292,13 @@
       "severity": "high",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["entity.organization_declared"],
+      "depends_on": [
+        "entity.organization_declared"
+      ],
       "requires_language": false,
-      "threshold": { "min_links": 1 },
+      "threshold": {
+        "min_links": 1
+      },
       "title": "sameAs cross-references present",
       "signal": "sameAs property on the declared entity",
       "impact": "sameAs links let an AI corroborate identity across the web instead of guessing between similarly named entities.",
@@ -254,9 +311,21 @@
       "severity": "medium",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["entity.sameas_present"],
+      "depends_on": [
+        "entity.sameas_present"
+      ],
       "requires_language": false,
-      "threshold": { "authority_domains": ["wikidata.org", "wikipedia.org", "crunchbase.com", "linkedin.com", "github.com", "ror.org", "isni.org"] },
+      "threshold": {
+        "authority_domains": [
+          "wikidata.org",
+          "wikipedia.org",
+          "crunchbase.com",
+          "linkedin.com",
+          "github.com",
+          "ror.org",
+          "isni.org"
+        ]
+      },
       "title": "At least one sameAs points to an authority node",
       "signal": "sameAs targets matched against known authority domains",
       "impact": "Corroboration needs an anchor an AI already trusts. Links only to your own properties leave the identity chain unanchored.",
@@ -269,9 +338,17 @@
       "severity": "medium",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
-      "threshold": { "required_properties": ["og:title", "og:type", "og:url"] },
+      "threshold": {
+        "required_properties": [
+          "og:title",
+          "og:type",
+          "og:url"
+        ]
+      },
       "title": "Open Graph identity tags present",
       "signal": "Presence of core og: properties",
       "impact": "Open Graph is a widely consumed secondary identity signal and a fallback when JSON-LD is absent or malformed.",
@@ -284,7 +361,9 @@
       "severity": "high",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["entity.organization_declared"],
+      "depends_on": [
+        "entity.organization_declared"
+      ],
       "requires_language": false,
       "threshold": null,
       "title": "Entity naming is internally consistent",
@@ -292,7 +371,6 @@
       "impact": "Contradictory names across blocks actively teach an AI the wrong association and are worse than no data at all.",
       "plain_summary": "Your brand name is stated the same way everywhere on the page."
     },
-
     {
       "id": "orientation.heading_first_viewport",
       "category": "human_orientation",
@@ -300,9 +378,13 @@
       "severity": "critical",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
-      "threshold": { "first_viewport_px": 800 },
+      "threshold": {
+        "first_viewport_px": 800
+      },
       "title": "A heading appears in the first viewport",
       "signal": "Presence of an h1 or hero heading within the first viewport height",
       "impact": "A visitor arriving from an AI answer has seconds to confirm they landed in the right place. No heading means no confirmation.",
@@ -315,9 +397,13 @@
       "severity": "high",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
-      "threshold": { "first_viewport_px": 800 },
+      "threshold": {
+        "first_viewport_px": 800
+      },
       "title": "A primary action is available above the fold",
       "signal": "An anchor or button element positioned within the first viewport",
       "impact": "Without an obvious next step, AI-referred visitors read once and leave rather than converting.",
@@ -330,7 +416,9 @@
       "severity": "high",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
       "threshold": null,
       "title": "First-paint content is not obstructed",
@@ -345,7 +433,9 @@
       "severity": "medium",
       "confidence_class": "verified",
       "kind": "structural",
-      "depends_on": ["access.http_ok"],
+      "depends_on": [
+        "access.http_ok"
+      ],
       "requires_language": false,
       "threshold": null,
       "title": "Mobile viewport is declared",
@@ -360,9 +450,14 @@
       "severity": "high",
       "confidence_class": "heuristic",
       "kind": "statistical",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": true,
-      "threshold": { "first_viewport_px": 800, "min_signal_score": 1 },
+      "threshold": {
+        "first_viewport_px": 800,
+        "min_signal_score": 1
+      },
       "title": "A value proposition is stated above the fold",
       "signal": "Above-the-fold text evaluated for an action plus an offering",
       "impact": "Visitors who cannot tell what you do within the first screen bounce regardless of how accurate the AI citation was.",
@@ -375,9 +470,13 @@
       "severity": "medium",
       "confidence_class": "heuristic",
       "kind": "statistical",
-      "depends_on": ["render.content_without_js"],
+      "depends_on": [
+        "render.content_without_js"
+      ],
       "requires_language": false,
-      "threshold": { "min_body_font_px": 14 },
+      "threshold": {
+        "min_body_font_px": 14
+      },
       "title": "Body text is legible",
       "signal": "Computed or declared body font size",
       "impact": "Text below roughly 14px is difficult to read on mobile, increasing bounce for AI-referred visitors.",
