@@ -30,6 +30,9 @@ packages = []
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: exercises a real browser render (needs provisioned Chromium)",
+]
 
 # NOTE: After `pip install -e .` (or installing the pinned deps), the Chromium
 # binary must be provisioned ONCE as a setup step — it is intentionally NOT

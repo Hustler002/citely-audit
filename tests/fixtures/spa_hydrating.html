@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Loading…</title>
+</head>
+<body>
+  <!-- Client-rendered shell: a crawler that does not execute JS sees NOTHING of substance here.
+       The facts below are injected only after hydration, which is precisely the failure this
+       audit exists to detect. -->
+  <div id="root"></div>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <script>window.__NEXT_DATA__ = {"props":{"pageProps":{}}};</script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.title = 'Northwind Analytics — Real-time SQL dashboards';
+      document.getElementById('root').innerHTML =
+        '<header><h1>Real-time SQL dashboards for product teams</h1>' +
+        '<p>Northwind Analytics turns Postgres and Snowflake data into live dashboards in under five minutes.</p>' +
+        '<a href="/signup">Start free trial</a></header>' +
+        '<main><section><h2>What Northwind does</h2>' +
+        '<p>Northwind Analytics was founded in 2019 and serves more than 4,000 product teams.</p>' +
+        '<p>Dashboards refresh every 10 seconds and support row-level access controls.</p>' +
+        '<p>Northwind is SOC 2 Type II certified and processes over 2 billion events per day.</p>' +
+        '</section></main>';
+    });
+  </script>
+</body>
+</html>
