@@ -210,10 +210,19 @@ def build_artifact(url: str, config: dict, *, deadline: float | None = None,
 
     if not robots_result.audit_allowed:
         # Do not fetch at all. One root cause, attributed everywhere downstream.
-        errors.append({"stage": "robots", "type": "blocked",
-                       "message": robots_result.error or "robots.txt disallows the audit user-agent"})
-        artifact["pages"] = [{"url": SF.redact_url(url), "role": "homepage", "status": "blocked",
-                              "blocked_kind": "robots_disallowed", "skip_reason": "blocked"}]
+        # Report the REAL cause: an unreachable robots.txt is a fetch failure, not the site
+        # refusing us. Labelling both "robots_disallowed" tells the user a site blocks crawlers
+        # when we merely failed to reach it.
+        if getattr(robots_result, "unreachable", False):
+            errors.append({"stage": "fetch", "type": "robots_unreachable",
+                           "message": robots_result.error or "robots.txt could not be fetched"})
+            artifact["pages"] = [{"url": SF.redact_url(url), "role": "homepage", "status": "error",
+                                  "blocked_kind": None, "skip_reason": "fetch_failed"}]
+        else:
+            errors.append({"stage": "robots", "type": "blocked",
+                           "message": "robots.txt disallows the audit user-agent"})
+            artifact["pages"] = [{"url": SF.redact_url(url), "role": "homepage", "status": "blocked",
+                                  "blocked_kind": "robots_disallowed", "skip_reason": "blocked"}]
         artifact["timing"]["total_ms"] = int((time.monotonic() - started) * 1000)
         artifact["blocked_before_fetch"] = True
         return artifact

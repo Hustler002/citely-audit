@@ -242,8 +242,17 @@ def check_structured_data_present(pages_data) -> dict:
 
 
 def check_organization_declared(pages_data, thresholds) -> dict:
+    """Is there a machine-readable statement of WHO this page is about?
+
+    Graded by the strength of the declaration, not merely its presence in JSON-LD. Open Graph
+    names an entity but gives it no schema.org type and no sameAs anchor, so it earns partial
+    credit — treating it as equivalent to declaring nothing was wrong, and its `verified` failure
+    also suppressed three downstream checks as collateral.
+    """
     accepted = thresholds.get("accepted_types", DEFAULT_THRESHOLDS[
         "entity.organization_declared"]["accepted_types"])
+
+    # Strongest signal: a typed schema.org entity anywhere in the structured-data graph.
     for url, blocks, _og, _micro, _html in pages_data:
         entities = find_entities(blocks, accepted)
         if entities:
@@ -254,9 +263,24 @@ def check_organization_declared(pages_data, thresholds) -> dict:
                           selector='script[type="application/ld+json"]',
                           evidence=f"Declared entity type(s) {', '.join(types)}"
                                    + (f", name: {names[0]}" if names else ""))
+
+    # Weaker but real: Open Graph names the site even without a typed entity.
+    for url, _blocks, og, _micro, _html in pages_data:
+        site_name = (og.get("og:site_name") or "").strip()
+        og_title = (og.get("og:title") or "").strip()
+        if site_name or (og_title and og.get("og:url")):
+            named = site_name or og_title
+            return result("entity.organization_declared", "partial",
+                          measurement=f"open_graph:{named}", page_url=url,
+                          selector='meta[property="og:site_name"]',
+                          evidence=f"Identity declared only via Open Graph (\"{named}\"). This names "
+                                   f"the site but carries no schema.org type and no sameAs links, so "
+                                   f"an AI cannot corroborate it against an authoritative source.")
+
     url = pages_data[0][0] if pages_data else None
     return result("entity.organization_declared", "fail", measurement=0, page_url=url,
-                  evidence=f"No entity of an accepted identity type ({', '.join(accepted)}) declared")
+                  evidence=f"No entity of an accepted identity type ({', '.join(accepted)}) declared, "
+                           f"and no Open Graph site identity either")
 
 
 def _sameas_of(entities) -> list:

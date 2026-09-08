@@ -40,6 +40,25 @@ log = logging.getLogger("safe_fetch")
 # explicitly because they are the highest-value SSRF targets and deserve an unmissable rule.
 METADATA_IPS = frozenset({"169.254.169.254", "fd00:ec2::254"})
 
+# NAT64 prefixes (RFC 6052 well-known, RFC 8215 local-use). On an IPv6-only network a DNS64 resolver
+# synthesizes these, embedding the real IPv4 in the low 32 bits. They must be DECODED, not blanket
+# blocked: Python marks the whole prefix is_reserved, which would reject every public site on such a
+# network. Only the embedded IPv4 tells us whether the destination is actually internal.
+NAT64_PREFIXES = (
+    ipaddress.ip_network("64:ff9b::/96"),
+    ipaddress.ip_network("64:ff9b:1::/48"),
+)
+
+
+def nat64_embedded_ipv4(addr):
+    """Return the IPv4 embedded in a NAT64 address, or None if this is not one."""
+    if not isinstance(addr, ipaddress.IPv6Address):
+        return None
+    for prefix in NAT64_PREFIXES:
+        if addr in prefix:
+            return ipaddress.ip_address(int(addr) & 0xFFFFFFFF)
+    return None
+
 REDACTED = "[REDACTED]"
 SENSITIVE_HEADERS = frozenset({"authorization", "cookie", "set-cookie", "proxy-authorization"})
 
@@ -112,6 +131,10 @@ class RobotsResult:
     crawl_delay: float | None = None
     sitemaps: list = field(default_factory=list)
     error: str | None = None
+    # True when robots.txt could not be FETCHED at all (DNS, SSRF refusal, 5xx, timeout). Distinct
+    # from a robots.txt that was read and says Disallow — conflating them tells the user a site
+    # refuses crawlers when we simply never reached it.
+    unreachable: bool = False
 
     @property
     def blocked_ai_crawlers(self) -> list:
@@ -159,7 +182,8 @@ def is_safe_ip(ip: str) -> bool:
     # Verified against Python 3.11 (see tests/test_security.py::test_ipv6_transition_bypasses_rejected):
     #   ::ffff:a.b.c.d  (IPv4-mapped)     -> already caught by Python's is_private; unwrap is belt-and-braces
     #   ::a.b.c.d       (IPv4-compatible) -> caught by is_reserved
-    #   64:ff9b::/96    (NAT64)           -> caught by is_reserved
+    #   64:ff9b::/96    (NAT64)           -> DECODED below; is_reserved would wrongly block the
+    #                                        whole prefix, including public hosts on IPv6-only networks
     #   2002::/16       (6to4)            -> caught by NOTHING in Python's predicates.
     # The sixtofour branch below is therefore LOAD-BEARING: deleting it silently opens an SSRF hole
     # to loopback/RFC1918/metadata via 6to4. Do not "simplify" it away.
@@ -170,6 +194,11 @@ def is_safe_ip(ip: str) -> bool:
         sixtofour = getattr(addr, "sixtofour", None)
         if sixtofour is not None:
             return is_safe_ip(str(sixtofour))
+        nat64 = nat64_embedded_ipv4(addr)
+        if nat64 is not None:
+            # Judge the destination the packet actually reaches. Blanket-blocking the NAT64 prefix
+            # would make every public site unreachable on an IPv6-only network.
+            return is_safe_ip(str(nat64))
 
     return not (
         addr.is_private
@@ -465,7 +494,10 @@ def check_robots(base_url: str, config: dict, *, deadline: float | None = None) 
     if fetched.error is not None:
         out.checked = False
         out.error = fetched.error
-        out.audit_allowed = False  # conservative: unreachable != permitted
+        out.audit_allowed = False   # conservative: unreachable != permitted (PLAN §6.3.1)
+        # ...but record WHY. Without this the caller cannot tell "the site refuses crawlers" from
+        # "we could not reach robots.txt", and would report the former about a site it never read.
+        out.unreachable = True
         return out
 
     if fetched.status is not None and 400 <= fetched.status < 500:
@@ -479,6 +511,7 @@ def check_robots(base_url: str, config: dict, *, deadline: float | None = None) 
         out.checked = False
         out.error = f"robots.txt returned {fetched.status}"
         out.audit_allowed = False
+        out.unreachable = True
         return out
 
     parser = urllib.robotparser.RobotFileParser()

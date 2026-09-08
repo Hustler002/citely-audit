@@ -61,7 +61,10 @@ def test_unsafe_ips_rejected(ip):
 # IPv6 transition mechanisms. These encode an IPv4 address inside an IPv6 one and are a standard
 # SSRF bypass route. Verified coverage as of Python 3.11:
 #   * ::ffff:a.b.c.d (IPv4-mapped) -> caught by Python's own is_private (our unwrap is belt-and-braces)
-#   * ::a.b.c.d (IPv4-compatible) and 64:ff9b::/96 (NAT64) -> caught by is_reserved
+#   * ::a.b.c.d (IPv4-compatible) -> caught by is_reserved
+#   * 64:ff9b::/96 (NAT64) -> DECODED, not blanket-blocked. is_reserved covers the whole
+#     prefix, which would reject every PUBLIC site on an IPv6-only/DNS64 network. Only the
+#     embedded IPv4 decides. Both directions are tested below.
 #   * 2002::/16 (6to4) -> caught by NOTHING in Python's predicates. Our explicit sixtofour unwrap in
 #     is_safe_ip is the ONLY thing blocking these, so these cases must never lose coverage.
 @pytest.mark.parametrize("ip,mechanism", [
@@ -472,3 +475,82 @@ def test_malformed_robots_does_not_crash(monkeypatch, config):
     _robots(monkeypatch, b"\xff\xfe not really robots \x00\x01\nUser-agent\n Disallow")
     r = F.check_robots("https://example.test/", config)
     assert r.checked is True  # degraded, but the audit continues
+
+
+# --- NAT64 (found by a real run on an IPv6-only network) -------------------------------------------
+# books.toscrape.com resolved to 64:ff9b::23d3:7a6d, a NAT64 address embedding the PUBLIC IPv4
+# 35.211.122.109. The guard rejected it as "non-public", making every website unreachable on such a
+# network. The original Phase 2 analysis tested NAT64 only with PRIVATE embedded addresses, saw them
+# blocked, and wrongly concluded the prefix was "covered".
+
+@pytest.mark.parametrize("addr,embedded", [
+    ("64:ff9b::23d3:7a6d", "35.211.122.109"),   # the exact address from the bug report
+    ("64:ff9b::8.8.8.8", "8.8.8.8"),
+    ("64:ff9b::1.1.1.1", "1.1.1.1"),
+    ("64:ff9b::5db8:d822", "93.184.216.34"),
+])
+def test_nat64_wrapping_a_public_address_is_allowed(addr, embedded):
+    """A NAT64 address reaching a public host must be allowed, exactly as the raw IPv4 would be."""
+    assert F.is_safe_ip(embedded) is True, "precondition: the embedded address is public"
+    assert F.is_safe_ip(addr) is True, f"NAT64 wrapping public {embedded} must not be blocked"
+
+
+@pytest.mark.parametrize("addr,embedded", [
+    ("64:ff9b::10.0.0.1", "10.0.0.1"),
+    ("64:ff9b::192.168.1.1", "192.168.1.1"),
+    ("64:ff9b::127.0.0.1", "127.0.0.1"),
+    ("64:ff9b::169.254.169.254", "169.254.169.254"),
+    ("64:ff9b:1::10.0.0.1", "10.0.0.1"),        # RFC 8215 local-use prefix
+])
+def test_nat64_wrapping_an_internal_address_is_still_blocked(addr, embedded):
+    """Decoding must not become a bypass: NAT64 reaching an internal host stays blocked."""
+    assert F.is_safe_ip(embedded) is False, "precondition: the embedded address is internal"
+    assert F.is_safe_ip(addr) is False, f"NAT64 wrapping internal {embedded} must be blocked"
+
+
+def test_nat64_decoding_matches_the_embedded_verdict_exactly():
+    """The NAT64 verdict must equal the verdict for the address it actually reaches."""
+    import ipaddress
+    for suffix in ("8.8.8.8", "10.0.0.1", "127.0.0.1", "169.254.169.254", "93.184.216.34",
+                   "172.16.0.1", "35.211.122.109"):
+        wrapped = f"64:ff9b::{suffix}"
+        assert F.is_safe_ip(wrapped) == F.is_safe_ip(suffix), f"mismatch for {wrapped}"
+
+
+def test_nat64_helper_extracts_the_right_address():
+    import ipaddress
+    addr = ipaddress.ip_address("64:ff9b::23d3:7a6d")
+    assert str(F.nat64_embedded_ipv4(addr)) == "35.211.122.109"
+    assert F.nat64_embedded_ipv4(ipaddress.ip_address("2606:2800:220:1:248:1893:25c8:1946")) is None
+    assert F.nat64_embedded_ipv4(ipaddress.ip_address("8.8.8.8")) is None
+
+
+# --- Unreachable robots.txt is not a robots disallow ------------------------------------------------
+def test_unreachable_robots_is_flagged_as_unreachable(monkeypatch, config):
+    """A network failure must not be reported as 'the site disallows crawlers'.
+
+    The audit is still refused (conservative, PLAN §6.3.1) — but the recorded CAUSE differs, so the
+    report cannot claim a site blocks crawlers when robots.txt was never read.
+    """
+    monkeypatch.setattr(F, "safe_get", lambda url, cfg, **k: F.FetchResult(
+        requested_url=url, error="connection refused", error_kind="network"))
+    result = F.check_robots("https://e.test/", config)
+    assert result.audit_allowed is False
+    assert result.unreachable is True
+
+
+def test_explicit_robots_disallow_is_not_flagged_unreachable(monkeypatch, config):
+    monkeypatch.setattr(F, "safe_get", lambda url, cfg, **k: F.FetchResult(
+        requested_url=url, final_url=url, status=200,
+        body=b"User-agent: CitelyAuditBot\nDisallow: /\n", content_type="text/plain"))
+    result = F.check_robots("https://e.test/", config)
+    assert result.audit_allowed is False
+    assert result.unreachable is False
+
+
+def test_server_error_robots_is_unreachable(monkeypatch, config):
+    monkeypatch.setattr(F, "safe_get", lambda url, cfg, **k: F.FetchResult(
+        requested_url=url, final_url=url, status=503, body=b"", content_type="text/plain"))
+    result = F.check_robots("https://e.test/", config)
+    assert result.audit_allowed is False
+    assert result.unreachable is True

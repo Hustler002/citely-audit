@@ -14,7 +14,12 @@
     "title": "Short finding title.",
     "signal": "The mechanism being measured (first link of the reasoning chain).",
     "impact": "Why it matters for AI ingestion or human retention.",
-    "plain_summary": "Non-expert phrasing for the report's layer-1 verdict."
+    "plain_summary": "Non-expert phrasing for the report's layer-1 verdict.",
+    "remediation": "Plain-language fix, used as suggested_action.summary. Lives here so report wording has one source of truth; Phase 7's advisor enriches it with snippets and validation steps.",
+    "failure_title": "Finding title when the check does NOT pass. `title` states what good looks like, which reads backwards in a finding ('Mobile viewport is declared' when it is missing).",
+    "failure_summary": "Non-expert phrasing of the PROBLEM, used as the finding's plain_summary.",
+    "partial_title": "Finding title when the check is PARTIAL rather than failed. Only present where the failure title would be false for a partial (an absolute 'No X' when some X exists); otherwise the failure title covers both and is reused.",
+    "partial_summary": "Non-expert phrasing of a PARTIAL result. Falls back to failure_summary when absent."
   },
   "checks": [
     {
@@ -30,7 +35,10 @@
       "title": "Page returns a successful HTTP status",
       "signal": "HTTP status of the final URL after redirects",
       "impact": "A non-2xx response means no AI crawler can ingest the page at all; every downstream signal is unmeasurable.",
-      "plain_summary": "AI assistants can load your page."
+      "plain_summary": "AI assistants can load your page.",
+      "remediation": "Fix the server error so the page returns a successful response. Check hosting logs and any redirect rules for this URL.",
+      "failure_title": "Page does not load successfully",
+      "failure_summary": "AI assistants cannot load your page at all."
     },
     {
       "id": "access.ai_crawlers_allowed",
@@ -49,7 +57,10 @@
       "signal": "robots.txt directives evaluated for each major AI crawler user-agent (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot, OAI-SearchBot) on the target path",
       "impact": "This is the single most direct way to be invisible to AI assistants. A site can be fully crawlable by search engines yet block GPTBot, in which case ChatGPT can never read or cite it. The block is often a CDN or platform default the site owner never consciously chose.",
       "plain_summary": "The AI assistants' crawlers are allowed to read your site.",
-      "_note": "Deliberately evaluated for the AI crawlers, NOT for CitelyAuditBot. Whether OUR bot may fetch is an operational gate handled by the orchestrator (stop + partial_reason 'blocked'), not a scored check — nobody blocks an unknown auditor UA, so scoring that would pass on every site and miss real AI-crawler blocks."
+      "_note": "Deliberately evaluated for the AI crawlers, NOT for CitelyAuditBot. Whether OUR bot may fetch is an operational gate handled by the orchestrator (stop + partial_reason 'blocked'), not a scored check — nobody blocks an unknown auditor UA, so scoring that would pass on every site and miss real AI-crawler blocks.",
+      "remediation": "Edit robots.txt to allow the AI assistants' crawlers. Remove or narrow the Disallow rules for the user-agents listed in the evidence.",
+      "failure_title": "robots.txt blocks the AI assistants' crawlers",
+      "failure_summary": "Your robots.txt is telling AI assistants to stay out."
     },
     {
       "id": "access.indexable",
@@ -66,7 +77,10 @@
       "title": "Page is not marked noindex",
       "signal": "meta name=robots content and the X-Robots-Tag response header",
       "impact": "A noindex directive tells engines not to retain the page, so its facts never enter the index AI systems draw on.",
-      "plain_summary": "Your page is not telling search engines to ignore it."
+      "plain_summary": "Your page is not telling search engines to ignore it.",
+      "remediation": "Remove the noindex directive from the page's meta robots tag or from the X-Robots-Tag response header.",
+      "failure_title": "Page is marked noindex",
+      "failure_summary": "Your page is telling search engines to ignore it."
     },
     {
       "id": "render.content_without_js",
@@ -87,7 +101,10 @@
       "title": "Meaningful content exists without JavaScript",
       "signal": "Visible text length in the raw (pre-JavaScript) HTML response",
       "impact": "Crawlers that do not execute JavaScript see an empty shell. Facts that only appear after hydration are invisible to them, so nothing is quotable or citable.",
-      "plain_summary": "Your content is in the page itself, not built later by the browser."
+      "plain_summary": "Your content is in the page itself, not built later by the browser.",
+      "remediation": "Server-render or pre-render the page so its key facts are present in the initial HTML, before any JavaScript runs.",
+      "failure_title": "Content only appears after JavaScript runs",
+      "failure_summary": "AI assistants that do not run JavaScript see an empty page."
     },
     {
       "id": "extraction.semantic_html",
@@ -104,7 +121,12 @@
       "title": "Semantic HTML landmarks present",
       "signal": "Presence of main/article/header/nav landmarks and a single h1",
       "impact": "Semantic structure tells extractors which text is primary content versus navigation and boilerplate.",
-      "plain_summary": "Your page structure marks out what the main content is."
+      "plain_summary": "Your page structure marks out what the main content is.",
+      "remediation": "Wrap the primary content in a <main> or <article> element and give the page exactly one <h1>, so extractors can tell content from navigation.",
+      "failure_title": "Semantic HTML landmarks are missing",
+      "failure_summary": "Nothing marks out which part of the page is the main content.",
+      "partial_title": "Semantic HTML landmarks are incomplete",
+      "partial_summary": "Your page structure only partly marks out the main content."
     },
     {
       "id": "extraction.facts_not_image_only",
@@ -124,7 +146,12 @@
       "title": "Key facts are not locked inside images",
       "signal": "Ratio of images carrying apparent factual content (numbers, claims) with no equivalent text or alt",
       "impact": "Text baked into images, SVG or canvas cannot be parsed into embeddings, so those facts are unavailable for citation even though a human can read them.",
-      "plain_summary": "Your important facts are written as text, not trapped in pictures."
+      "plain_summary": "Your important facts are written as text, not trapped in pictures.",
+      "remediation": "Repeat any facts shown inside images as real text, or add alt text carrying the same numbers and claims.",
+      "failure_title": "Key facts are locked inside images",
+      "failure_summary": "Some of your facts exist only as pictures, so AI cannot read them.",
+      "partial_title": "Some facts are locked inside images",
+      "partial_summary": "A few of your facts exist only as pictures."
     },
     {
       "id": "content.title_descriptive",
@@ -144,7 +171,12 @@
       "title": "Descriptive page title",
       "signal": "Length and presence of the document title element",
       "impact": "The title is the strongest single hint an AI summarizer uses to decide what a page is about.",
-      "plain_summary": "Your page title clearly says what the page is."
+      "plain_summary": "Your page title clearly says what the page is.",
+      "remediation": "Write a page title of roughly 15-70 characters that names the page and what it offers.",
+      "failure_title": "Page title is missing or unhelpful",
+      "failure_summary": "Your page title does not clearly say what the page is.",
+      "partial_title": "Page title is the wrong length",
+      "partial_summary": "Your page title exists but is too short or too long to work well."
     },
     {
       "id": "content.meta_description",
@@ -164,7 +196,12 @@
       "title": "Meta description present and usable",
       "signal": "Presence and length of meta name=description",
       "impact": "Provides a ready-made summary that answer engines frequently reuse verbatim.",
-      "plain_summary": "Your page has a short summary engines can reuse."
+      "plain_summary": "Your page has a short summary engines can reuse.",
+      "remediation": "Add a meta description of roughly 50-160 characters summarising the page in one sentence an answer engine could reuse verbatim.",
+      "failure_title": "Meta description is missing or the wrong length",
+      "failure_summary": "There is no short summary for answer engines to reuse.",
+      "partial_title": "Meta description is the wrong length",
+      "partial_summary": "You have a summary, but its length limits how well engines can reuse it."
     },
     {
       "id": "content.heading_hierarchy",
@@ -183,7 +220,12 @@
       "title": "Logical heading hierarchy",
       "signal": "Heading level sequence (h1 to h6) checked for skipped levels and multiple h1s",
       "impact": "Headings define the document outline summarizers use to decide which sections survive condensation.",
-      "plain_summary": "Your headings are in a sensible order."
+      "plain_summary": "Your headings are in a sensible order.",
+      "remediation": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4).",
+      "failure_title": "Heading structure is inconsistent",
+      "failure_summary": "Your headings are not in a sensible order.",
+      "partial_title": "Heading structure has gaps",
+      "partial_summary": "Your headings are mostly sensible but skip levels or repeat the top level."
     },
     {
       "id": "content.scannable_blocks",
@@ -205,7 +247,12 @@
       "title": "Facts presented in scannable blocks",
       "signal": "Presence of lists, tables or definition lists carrying factual content",
       "impact": "Structured blocks are extracted far more reliably than the same facts buried in prose paragraphs.",
-      "plain_summary": "Key details appear in lists or tables, not only in paragraphs."
+      "plain_summary": "Key details appear in lists or tables, not only in paragraphs.",
+      "remediation": "Move key facts out of prose into a list, table or definition list, which are extracted far more reliably than paragraphs.",
+      "failure_title": "Facts are buried in prose",
+      "failure_summary": "Key details are locked in paragraphs instead of lists or tables.",
+      "partial_title": "Few scannable blocks",
+      "partial_summary": "Most of your key details sit in paragraphs rather than lists or tables."
     },
     {
       "id": "quotability.self_contained_facts",
@@ -248,7 +295,12 @@
       "title": "Self-contained, quotable factual statements",
       "signal": "Count of sentences that state a complete fact without needing surrounding context",
       "impact": "Retrieval systems cite sentences that stand alone. Statements that depend on the previous paragraph get dropped.",
-      "plain_summary": "Your page makes clear standalone statements an AI can quote."
+      "plain_summary": "Your page makes clear standalone statements an AI can quote.",
+      "remediation": "Rewrite key claims as complete standalone sentences that name the subject, so each still makes sense when quoted on its own.",
+      "failure_title": "Few statements can stand alone as quotes",
+      "failure_summary": "Your sentences do not make sense when quoted on their own.",
+      "partial_title": "Few statements stand alone as quotes",
+      "partial_summary": "Only a little of your text makes sense when quoted on its own."
     },
     {
       "id": "density.factual_ratio",
@@ -282,7 +334,12 @@
       "title": "Information density survives summarization",
       "signal": "Ratio of concrete factual sentences to total sentences, weighted by page length",
       "impact": "When a summarizer condenses a long page, low-density facts surrounded by filler are the first thing discarded.",
-      "plain_summary": "Your key facts are not diluted by filler text."
+      "plain_summary": "Your key facts are not diluted by filler text.",
+      "remediation": "Replace vague marketing phrasing with concrete specifics — numbers, dates, named capabilities — so the facts survive summarising.",
+      "failure_title": "Facts are diluted by filler",
+      "failure_summary": "Your key facts are surrounded by too much vague wording.",
+      "partial_title": "Facts are somewhat diluted",
+      "partial_summary": "Your key facts compete with a fair amount of vague wording."
     },
     {
       "id": "entity.structured_data_present",
@@ -299,7 +356,12 @@
       "title": "Structured data is present",
       "signal": "Presence of parseable JSON-LD, microdata or RDFa",
       "impact": "Without structured data an AI must infer identity from prose, which is where mistaken-identity and hallucination begin.",
-      "plain_summary": "Your page includes machine-readable information about itself."
+      "plain_summary": "Your page includes machine-readable information about itself.",
+      "remediation": "Add a JSON-LD block describing this page, so machines read structured facts instead of inferring identity from prose.",
+      "failure_title": "No structured data on the page",
+      "failure_summary": "Your page has no machine-readable information about itself.",
+      "partial_title": "Structured data is incomplete",
+      "partial_summary": "Your page has some machine-readable information, but not the richest kind."
     },
     {
       "id": "entity.organization_declared",
@@ -324,7 +386,12 @@
       "title": "An organization or person entity is declared",
       "signal": "A schema.org entity of an accepted identity type in the structured data graph",
       "impact": "This is the anchor that tells an AI who the page is about. Without it the brand has no declared identity to attach facts to.",
-      "plain_summary": "Your page states who you are in a way machines understand."
+      "plain_summary": "Your page states who you are in a way machines understand.",
+      "remediation": "Add a JSON-LD Organization (or Person) entry that names who this site is about.",
+      "failure_title": "No organization or person entity declared",
+      "failure_summary": "Your page never states who it is about in a way machines understand.",
+      "partial_title": "Identity is declared only weakly",
+      "partial_summary": "Your page names who it is, but not in a form machines can corroborate."
     },
     {
       "id": "entity.sameas_present",
@@ -343,7 +410,10 @@
       "title": "sameAs cross-references present",
       "signal": "sameAs property on the declared entity",
       "impact": "sameAs links let an AI corroborate identity across the web instead of guessing between similarly named entities.",
-      "plain_summary": "You link out to your other official profiles."
+      "plain_summary": "You link out to your other official profiles.",
+      "remediation": "Add sameAs links from your Organization entry to your official profiles elsewhere on the web.",
+      "failure_title": "No sameAs cross-references",
+      "failure_summary": "You do not link out to your other official profiles."
     },
     {
       "id": "entity.sameas_authority",
@@ -370,7 +440,10 @@
       "title": "At least one sameAs points to an authority node",
       "signal": "sameAs targets matched against known authority domains",
       "impact": "Corroboration needs an anchor an AI already trusts. Links only to your own properties leave the identity chain unanchored.",
-      "plain_summary": "At least one of your links points somewhere authoritative."
+      "plain_summary": "At least one of your links points somewhere authoritative.",
+      "remediation": "Include at least one sameAs link to an authority such as Wikidata, Wikipedia or Crunchbase, so the identity chain is anchored to a source AI systems already trust.",
+      "failure_title": "No sameAs link reaches an authority",
+      "failure_summary": "None of your links point somewhere AI systems already trust."
     },
     {
       "id": "entity.opengraph_identity",
@@ -393,7 +466,12 @@
       "title": "Open Graph identity tags present",
       "signal": "Presence of core og: properties",
       "impact": "Open Graph is a widely consumed secondary identity signal and a fallback when JSON-LD is absent or malformed.",
-      "plain_summary": "Your page has social/preview tags describing it."
+      "plain_summary": "Your page has social/preview tags describing it.",
+      "remediation": "Add the core Open Graph tags (og:title, og:type, og:url) to the page head.",
+      "failure_title": "Open Graph identity tags missing",
+      "failure_summary": "Your page lacks the social/preview tags that describe it.",
+      "partial_title": "Open Graph identity tags are incomplete",
+      "partial_summary": "You have some social/preview tags, but not all the core ones."
     },
     {
       "id": "entity.name_consistency",
@@ -410,7 +488,10 @@
       "title": "Entity naming is internally consistent",
       "signal": "Entity name compared across JSON-LD blocks, Open Graph site name and the document title",
       "impact": "Contradictory names across blocks actively teach an AI the wrong association and are worse than no data at all.",
-      "plain_summary": "Your brand name is stated the same way everywhere on the page."
+      "plain_summary": "Your brand name is stated the same way everywhere on the page.",
+      "remediation": "Use one exact spelling of your name across JSON-LD, Open Graph and the page title.",
+      "failure_title": "Entity naming is inconsistent",
+      "failure_summary": "Your brand name is written differently in different places."
     },
     {
       "id": "orientation.heading_first_viewport",
@@ -431,7 +512,10 @@
       "title": "A heading appears in the first viewport",
       "signal": "Presence of an h1 or hero heading within the first viewport height",
       "impact": "A visitor arriving from an AI answer has seconds to confirm they landed in the right place. No heading means no confirmation.",
-      "plain_summary": "Visitors see a clear headline as soon as they land."
+      "plain_summary": "Visitors see a clear headline as soon as they land.",
+      "remediation": "Put a clear headline at the top of the page so arriving visitors immediately see what it is.",
+      "failure_title": "No heading in the first viewport",
+      "failure_summary": "Visitors do not see a clear headline when they land."
     },
     {
       "id": "orientation.primary_cta",
@@ -451,7 +535,10 @@
       "title": "A primary action is available above the fold",
       "signal": "An anchor or button element positioned within the first viewport",
       "impact": "Without an obvious next step, AI-referred visitors read once and leave rather than converting.",
-      "plain_summary": "There is something obvious to click when visitors arrive."
+      "plain_summary": "There is something obvious to click when visitors arrive.",
+      "remediation": "Place a clear link or button above the fold giving arriving visitors an obvious next step.",
+      "failure_title": "No clear action above the fold",
+      "failure_summary": "There is nothing obvious to click when visitors arrive."
     },
     {
       "id": "orientation.content_not_obstructed",
@@ -471,7 +558,10 @@
       "title": "First-paint content is not obstructed",
       "signal": "Full-viewport overlays, modals or consent interstitials covering initial content",
       "impact": "An interstitial covering the first screen hides the very answer the visitor arrived for.",
-      "plain_summary": "No popup covers your content the moment visitors arrive."
+      "plain_summary": "No popup covers your content the moment visitors arrive.",
+      "remediation": "Stop the overlay or consent banner covering the first screen — make it smaller, or dismissible without hiding the content behind it.",
+      "failure_title": "Content is obstructed on arrival",
+      "failure_summary": "Something covers your content the moment visitors arrive."
     },
     {
       "id": "orientation.viewport_meta",
@@ -488,7 +578,10 @@
       "title": "Mobile viewport is declared",
       "signal": "Presence of meta name=viewport",
       "impact": "Most AI-referred traffic is mobile. Without a viewport declaration the page renders unusably small.",
-      "plain_summary": "Your page is set up to display properly on phones."
+      "plain_summary": "Your page is set up to display properly on phones.",
+      "remediation": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives.",
+      "failure_title": "Mobile viewport is not declared",
+      "failure_summary": "Your page is not set up to display properly on phones."
     },
     {
       "id": "orientation.value_proposition",
@@ -569,7 +662,12 @@
       "title": "A value proposition is stated above the fold",
       "signal": "Above-the-fold text evaluated for an action plus an offering",
       "impact": "Visitors who cannot tell what you do within the first screen bounce regardless of how accurate the AI citation was.",
-      "plain_summary": "Visitors can tell what you offer without scrolling."
+      "plain_summary": "Visitors can tell what you offer without scrolling.",
+      "remediation": "State plainly in the headline area what you do and who it is for, so a visitor from an AI answer can confirm within seconds that they are in the right place.",
+      "failure_title": "No clear value proposition above the fold",
+      "failure_summary": "Visitors cannot tell what you offer without scrolling.",
+      "partial_title": "Value proposition is unclear",
+      "partial_summary": "Visitors get a hint of what you offer, but not a clear statement."
     },
     {
       "id": "orientation.legibility",
@@ -589,7 +687,10 @@
       "title": "Body text is legible",
       "signal": "Computed or declared body font size",
       "impact": "Text below roughly 14px is difficult to read on mobile, increasing bounce for AI-referred visitors.",
-      "plain_summary": "Your body text is big enough to read comfortably."
+      "plain_summary": "Your body text is big enough to read comfortably.",
+      "remediation": "Increase body text to at least 14px so it is comfortable to read on a phone.",
+      "failure_title": "Body text is too small",
+      "failure_summary": "Your body text is smaller than is comfortable to read."
     }
   ]
 }

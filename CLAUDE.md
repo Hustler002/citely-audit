@@ -84,6 +84,16 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
   markup legitimately lives on `/about`.
 - **`safe_get` never raises.** It is the network boundary; every failure becomes a `FetchResult`
   with an `error_kind`, including a final catch-all for unanticipated resolver/urllib3 errors.
+- **Entity identity is graded by STRENGTH, not presence in JSON-LD** (added 2026-09-08).
+  A typed schema.org entity is `pass`; Open Graph identity alone (`og:site_name`) is `partial`;
+  nothing is `fail`. Treating Open Graph as equivalent to declaring nothing scored github.com at
+  37.5 and — because a `verified` fail suppresses dependents — also wiped `sameas_present`,
+  `sameas_authority` and `name_consistency` to `unknown` as collateral.
+- **Finding wording is chosen by check STATE.** Registry `title`/`plain_summary` describe what GOOD
+  looks like; `failure_*` describes a fail; `partial_*` describes a partial. Using the wrong one
+  produced titles that contradicted their own evidence in BOTH directions — "Mobile viewport is
+  declared" for a missing viewport, and "No organization or person entity declared" for a page whose
+  evidence read "Identity declared only via Open Graph".
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
@@ -98,31 +108,28 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 - Base spec has **no** `marketplace.json` / `entrypoint` concept — bespoke to this brief.
 - Official validator: `skills-ref validate ./<skill>` (github.com/agentskills/agentskills).
 
-## Current status: PHASE 5 COMPLETE + RESILIENCE HARDENED — ready for Phase 6
+## Current status: PHASE 6 COMPLETE — **the audit runs end-to-end and emits a real report**
 
-**647 tests, 13 skipped.** All **24 of 24 checks are implemented** across four analyzers, the full
-four-category score is produced end-to-end, and the pipeline has been hardened against hostile and
-malformed real-world input (see the resilience section below).
+**705 tests, 13 skipped.** **Citely is now a working tool.** `run_audit.py` fetches, selects pages,
+renders, runs all four analyzers as subprocesses, scores, and emits a schema-valid JSON report.
 
-Verified on a live Tier-A render against the fixture server:
-| Page | Overall | Coverage | States |
+Verified on real input:
+| Target | Score | Coverage | Findings |
 |---|---|---|---|
-| healthy (SSR) | 98.8 | 0.975 | 22 pass / 1 partial |
-| SPA shell | 85.3 | **0.23** | 4 pass / 1 fail / 19 unknown |
+| `https://example.com` (live) | 62/100 | 0.805 | 8 — all genuine (no structured data, 14-char title, no meta description) |
+| healthy fixture | 99/100 | 0.85 | 1 |
+| **German fixture** | **98/100** | 0.698 | 1 — generalization proven: the gap shows as *coverage*, not failures |
+| SPA shell | 30/100 | 0.175 | 2 |
 
-The SPA row is the model working as designed: one root cause suppresses 19 checks, so the headline
-85.3 is honest only because coverage 0.23 sits beside it.
+Run it:
+```bash
+./.venv/Scripts/python.exe skills/audit-orchestrator/scripts/run_audit.py --url https://example.com
+./.venv/Scripts/python.exe skills/audit-orchestrator/scripts/run_audit.py --html-file page.html --ci
+```
+stdout is the report and nothing else; logs go to stderr. `--ci` exits 1 on any critical finding.
 
-**Chromium IS provisioned**; Tier-A rendering verified end-to-end.
-
-Still missing: the other two analyzers (Phase 5) and orchestrator wiring (Phase 6). The entrypoint
-`run_audit.py` still returns `{"_status": "not_implemented"}`, so **there is no runnable report yet**.
-The 13 skips are the two unimplemented analyzers' stub files.
-
-**Environment:** `.venv/` created, all pinned deps installed (`pytest`, `jsonschema`, `lxml`,
-`beautifulsoup4`, `playwright`, `requests`) **and Chromium provisioned**.
-Run tests with `./.venv/Scripts/python.exe -m pytest`.
-**Disk note:** ~1.6 GB free after the Chromium install.
+Still to come: `remediation-advisor` (Phase 7) fills `recommendations[]` and enriches findings with
+copy-paste snippets; the non-expert output layer and HTML report are Phase 8.
 
 ### Implementation phases
 | Phase | Scope | Status |
@@ -132,8 +139,8 @@ Run tests with `./.venv/Scripts/python.exe -m pytest`.
 | 3 | Artifact pipeline (`_page_select.py`, `_render.py` Tier A/B) | ✅ **DONE** |
 | 4 | Structural analyzers (crawl/render/extraction, entity) | ✅ **DONE** |
 | 5 | Parity analyzers + i18n (engagement, quotability) | ✅ **DONE** |
-| 6 | Orchestration & report assembly | next |
-| 7 | `remediation-advisor` (6th skill) + proactive suggestions | |
+| 6 | Orchestration & report assembly | ✅ **DONE** |
+| 7 | `remediation-advisor` (6th skill) + proactive suggestions | next |
 | 8 | Non-expert output layer + `render_html.py` | |
 | 9 | `labeled_corpus.json` + precision/recall + archetype fixtures | |
 | 10 | Compliance & sign-off (`skills-ref validate`, README) | |
@@ -255,13 +262,33 @@ Verified safe: XML billion-laughs and XXE degrade to empty (no file read), overs
 capped, 10k-image and deeply-nested HTML complete without blowup, and exception messages are never
 leaked into report evidence (only the exception TYPE).
 
+### Phase 6 delivered
+- [x] `run_audit.py` — the real entrypoint: safe fetch → artifact → **subprocess fan-out** to all
+      four analyzer skills → check states → scoring → schema-valid report on stdout.
+- [x] **Remediation text added to all 24 checks** in `checks.json`. The mandated schema requires
+      `suggested_action` on every finding, so Phase 6 could not emit a valid report without it;
+      keeping it in the registry means report wording still has one source of truth.
+- [x] **Failure phrasing** (`failure_title`, `failure_summary`) added to all 24 checks. Registry
+      `title`/`plain_summary` describe what GOOD looks like, which read backwards in a finding
+      ("Mobile viewport is declared" when it is missing).
+- [x] `summary.category_coverage` — closes issue #10: a category can score 100.0 off one surviving
+      check, and per-category coverage makes that self-evident.
+- [x] Subprocess isolation: explicit env allowlist (no inherited tokens), per-child timeout, stdout
+      size cap, 0700 temp dir removed in `finally`. A failed analyzer degrades its checks to
+      `unknown` and is recorded — it never takes the audit down.
+- [x] `--ci` exit code; `_assert_no_ssrf_bypass_via_cli()` asserts the SSRF kill-switch can never
+      become a CLI flag.
+- [x] `sample-report.json` **regenerated from real orchestrator output** (was a hand-written
+      placeholder since Phase 1), with timestamps pinned so the committed file is stable.
+- [x] `tests/test_orchestrator.py` — 32 tests.
+
 ### Not yet done — implementation order (PLAN.md §14)
 - [x] ~~**2.** `_safe_fetch.py` + security corpus.~~ **DONE**
 - [ ] **3.** Artifact assembly, `_page_select.py` (sitemap → homepage fallback), `_render.py` (Tier A/B);
       fixture server routes (robots, sitemap, redirect, bomb).
 - [x] ~~**4.** structural analyzers~~ **DONE**
 - [x] ~~**5.** parity analyzers + i18n~~ **DONE**
-- [ ] **6.** Orchestrator wiring → schema-valid JSON report.
+- [x] ~~**6.** Orchestrator wiring → schema-valid JSON report.~~ **DONE**
 - [ ] **7.** `remediation-advisor` skill (**new, 6th**) incl. non-obvious proactive suggestions.
 - [ ] **8.** Non-expert output layer + `render_html.py` (folded in — `report-renderer` was cut as padding).
 - [ ] **9.** `labeled_corpus.json` + precision/recall harness; non-English, consent-wall, adversarial fixtures.
@@ -409,3 +436,34 @@ Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`.
   check. The blocked-homepage bug was the subtlest — a consent wall looked like a mid-scoring site
   because a healthy secondary page was graded in its place.
   Test count 349 -> 647.
+- 2026-09-08 — **Phase 6 complete. Citely runs.** Wired the orchestrator end-to-end and confirmed it
+  against a live site plus four fixtures.
+  Three gaps had to be closed first, all found by running it rather than by tests:
+    1. The mandated schema requires `suggested_action` on every finding, but **no remediation text
+       existed anywhere** and the advisor is Phase 7 — added `remediation` to all 24 checks.
+    2. **`points_recoverable` inverted priority**: a medium viewport finding scored +50.0 against a
+       critical render finding at +20.0, because the denominator was only the currently-measurable
+       weight. Since PLAN §7 ranks fixes by points, that would have told users to fix a meta tag
+       before server-rendering. Now divided by full category weight — stable and severity-consistent.
+    3. **Findings were titled as passes** — "Mobile viewport is declared" for a missing viewport.
+       Added explicit failure phrasing.
+  Also fixed `partial`: the catch-all marked a scan partial whenever ANY check was unknown, which
+  includes normal dependency suppression — so a completely successful audit reported
+  `partial: true, reason: render_failed`. `partial` now means the SCAN was incomplete, nothing else.
+  Test count 655 -> 687.
+- 2026-09-08 — **Entity Trust grading corrected** (found by a user audit of github.com scoring 37.5).
+  Detection was right — GitHub genuinely publishes no JSON-LD or microdata in raw OR rendered DOM —
+  but `check_organization_declared` consulted ONLY JSON-LD; its Open Graph argument was literally
+  named `_og`, i.e. deliberately unused. So `og:site_name = GitHub` counted for nothing, the check
+  hard-failed, and the `verified` failure suppressed 44% of the category as collateral. The check's
+  own impact text ("without it the brand has no declared identity") was factually false for the page.
+  Now three-state: typed entity -> pass, Open Graph identity -> partial, nothing -> fail.
+  github.com: entity_trust 37.5 -> 58.9, overall 80 -> 86. Deliberately NOT "very high" — Entity
+  Trust measures the identity markup ON THE PAGE, not how famous the brand is, and Open Graph gives
+  no schema.org type and no sameAs anchor.
+  That surfaced a mirrored wording bug: PARTIAL findings were using absolute failure titles, so
+  F-001 read "No organization or person entity declared" directly above evidence saying identity WAS
+  declared. Added `partial_title`/`partial_summary` for the 12 checks that can emit partial, plus a
+  self-maintaining test that derives which checks emit `partial` from analyzer source and fails if
+  any of them would fall back to an absolute "No X" title.
+  Test count 687 -> 705.

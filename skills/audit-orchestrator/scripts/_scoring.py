@@ -419,6 +419,29 @@ def coverage(resolved: dict[str, ResolvedCheck], registry: Registry, config: dic
     return 0.0 if denominator == 0 else round(numerator / denominator, 3)
 
 
+def category_coverage(resolved: dict[str, ResolvedCheck], registry: Registry,
+                      config: dict) -> dict[str, float]:
+    """Per-category share of check weight that was actually scored.
+
+    Overall `coverage` is not enough on its own: a CATEGORY headline can read 100.0 while resting on
+    a single surviving check. On the client-rendered fixture, Human Orientation scored 100.0 because
+    five of its six checks were suppressed and only `viewport_meta` remained — a number a reader
+    would reasonably mistake for a clean bill of health. Publishing coverage beside each category
+    score makes that self-evident.
+    """
+    excluded = set(config.get("excluded_states", [UNKNOWN, NOT_APPLICABLE]))
+    out: dict[str, float] = {}
+    for category in registry.categories:
+        checks = registry.by_category(category)
+        total = sum(c.weight for c in checks)
+        scored = sum(
+            c.weight for c in checks
+            if (resolved[c.id].state if c.id in resolved else UNKNOWN) not in excluded
+        )
+        out[category] = 0.0 if total == 0 else round(scored / total, 3)
+    return out
+
+
 def points_recoverable(
     check_id: str, resolved: dict[str, ResolvedCheck], registry: Registry, config: dict
 ) -> float:
@@ -434,11 +457,10 @@ def points_recoverable(
     if state in excluded:
         return 0.0
 
-    denominator = sum(
-        c.weight
-        for c in registry.by_category(check.category)
-        if (resolved[c.id].state if c.id in resolved else UNKNOWN) not in excluded
-    )
+    # Denominator is the FULL category weight, not just what happened to be measurable. Using the
+    # measurable subset made the few surviving checks in a suppressed scan look enormous — a medium
+    # finding outranking a critical one — which would invert remediation priority.
+    denominator = sum(c.weight for c in registry.by_category(check.category))
     if denominator == 0:
         return 0.0
 
@@ -447,11 +469,9 @@ def points_recoverable(
 
     weights = {k: v for k, v in config["category_weights"].items() if not k.startswith("_")}
     cat_weight = float(weights.get(check.category, 0))
-    total_weight = sum(
-        float(weights.get(cat, 0))
-        for cat in registry.categories
-        if _category_has_applicable(cat, resolved, registry, excluded)
-    )
+    # Likewise across categories: weight by the configured category weights, not by which
+    # categories happened to be measurable, so the figure is comparable between runs.
+    total_weight = sum(float(weights.get(cat, 0)) for cat in registry.categories)
     if total_weight == 0:
         return 0.0
     return round(category_gain * cat_weight / total_weight, 1)
@@ -496,7 +516,8 @@ def assign_finding_ids(findings: list[dict], config: dict) -> list[dict]:
 
 
 def summarize(findings: list[dict], cat_scores: dict[str, float | None],
-              overall: float | None, confidence: float, coverage_ratio: float | None = None) -> dict:
+              overall: float | None, confidence: float, coverage_ratio: float | None = None,
+              cat_coverage: dict[str, float] | None = None) -> dict:
     """Build the `summary` block and enforce the mandated invariant.
 
     The floor requires total_findings == critical + high + medium, so any severity outside the
@@ -524,4 +545,6 @@ def summarize(findings: list[dict], cat_scores: dict[str, float | None],
     }
     if coverage_ratio is not None:
         summary["coverage"] = coverage_ratio
+    if cat_coverage is not None:
+        summary["category_coverage"] = {k: cat_coverage[k] for k in sorted(cat_coverage)}
     return summary

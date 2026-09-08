@@ -5,9 +5,10 @@ diagnoses two things: **off-site AI discoverability** (why AI assistants fail to
 corroborate, or cite the brand's facts) and **on-site engagement** (why AI-referred visitors bounce).
 It runs read-only and emits a single evidence-backed JSON report.
 
-> **Status: architecture scaffold.** The directory structure, manifests, contracts (schemas), config,
-> and SKILL.md files are in place. The Python check/fetch/orchestration logic is present as
-> clearly-marked `TODO` skeletons and is not yet implemented.
+> **Status: working.** The audit runs end-to-end and emits a schema-valid JSON report: safe fetch,
+> page selection, tiered rendering, 24 checks across four analyzer skills, and capability scoring.
+> Still to come: copy-paste remediation snippets and proactive suggestions (Phase 7), and the
+> non-expert HTML report (Phase 8).
 
 ## Layout
 
@@ -36,7 +37,7 @@ pip install -e .
 python -m playwright install chromium
 ```
 
-## Run (once implemented)
+## Run
 
 ```bash
 # Online: audit a live homepage
