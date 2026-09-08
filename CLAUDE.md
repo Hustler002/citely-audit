@@ -72,6 +72,18 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
   **duplicated across skills by design**, never shared by import. Drift is caught by explicit tests
   in `tests/test_analyzers.py` (`test_spa_markers_match_config`, `test_embedded_thresholds_match_registry`,
   `test_sanitize_behaves_identically_across_skills`, …), NOT merely asserted.
+- **Analyzer output contract (enforced, not hoped for):** every analyzer ALWAYS emits exactly its
+  declared `CHECKS`, each with a valid registry id, regardless of input. `finalize()` drops anything
+  unrecognised and fills gaps with `unknown`. This is what makes the orchestrator safe to build:
+  previously an internal exception emitted the FUNCTION NAME as a check id, which `_scoring` rejects
+  as registry drift — crashing the whole audit and silently losing the real check.
+- **Homepage-authoritative analyzers are anchored to the homepage.** crawl / comprehension /
+  orientation measure the page with `role == "homepage"` or nothing. They must never fall through to
+  another page: a consent wall on the homepage previously scored 58.1 at 0.805 coverage because
+  `/pricing` was graded in its place. Entity corroboration is deliberately exempt — Organization
+  markup legitimately lives on `/about`.
+- **`safe_get` never raises.** It is the network boundary; every failure becomes a `FetchResult`
+  with an `error_kind`, including a final catch-all for unanticipated resolver/urllib3 errors.
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
@@ -86,10 +98,11 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 - Base spec has **no** `marketplace.json` / `entrypoint` concept — bespoke to this brief.
 - Official validator: `skills-ref validate ./<skill>` (github.com/agentskills/agentskills).
 
-## Current status: PHASE 5 COMPLETE — all 24 checks implemented, all four categories score
+## Current status: PHASE 5 COMPLETE + RESILIENCE HARDENED — ready for Phase 6
 
-**349 tests, 13 skipped.** All **24 of 24 checks are implemented** across four analyzers, and the
-full four-category score is produced end-to-end.
+**647 tests, 13 skipped.** All **24 of 24 checks are implemented** across four analyzers, the full
+four-category score is produced end-to-end, and the pipeline has been hardened against hostile and
+malformed real-world input (see the resilience section below).
 
 Verified on a live Tier-A render against the fixture server:
 | Page | Overall | Coverage | States |
@@ -224,6 +237,23 @@ Run tests with `./.venv/Scripts/python.exe -m pytest`.
 - [x] `tests/fixtures/non_english_page.html` — a structurally excellent German page. Tests assert it
       passes every language-independent check and never *fails* a language-gated one.
 - [x] `tests/test_analyzers_phase5.py` — 50 tests.
+
+### Resilience hardening (2026-09-06, pre-Phase-6)
+
+An adversarial probe (malformed artifacts, hostile HTML, XML attacks, hostile URLs, bad geometry)
+found **five real defects**, all now fixed with regression tests in `tests/test_resilience.py` (306):
+
+| # | Defect | Impact |
+|---|---|---|
+| 1 | Internal check error emitted the **function name** as `check_id` | **Orchestrator crash** — `_scoring` rejects unknown ids as registry drift, and the real check vanished |
+| 2 | `pages` as a dict (not a list) raised `AttributeError` in **all four** analyzers | Crash on a replayed/hand-written artifact |
+| 3 | Wrongly-typed fields (`raw.html` as int, `geometry.headings` as None, `top` as a string) | Silent **false negatives** — real checks became `unknown` |
+| 4 | 5000-char hostname raised `UnicodeError` from the IDNA codec, uncaught | **Crash** — `resolve_host` only caught `gaierror` |
+| 5 | Blocked homepage silently graded **a different page** | **False negative** — consent wall read 58.1 / 0.805 coverage; now 0.0 / 0.08 with `homepage blocked: consent_wall` |
+
+Verified safe: XML billion-laughs and XXE degrade to empty (no file read), oversized sitemaps are
+capped, 10k-image and deeply-nested HTML complete without blowup, and exception messages are never
+leaked into report evidence (only the exception TYPE).
 
 ### Not yet done — implementation order (PLAN.md §14)
 - [x] ~~**2.** `_safe_fetch.py` + security corpus.~~ **DONE**
@@ -371,3 +401,11 @@ Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`.
   the property that matters — injected instructions must never *improve* a verdict.
   A heredoc again wrote literal null bytes into a source file (second occurrence); caught by the
   Phase 4 guard test. Heredocs are no longer used for content containing escapes.
+- 2026-09-06 — **Resilience hardening before Phase 6.** Probed Phases 2-5 with malformed artifacts,
+  hostile HTML/JSON-LD, XML attacks, hostile URLs and corrupt geometry. Found 5 real defects — two
+  of them orchestrator-crashing, two false-negative-producing (details in the table above).
+  The most valuable fix is structural rather than a patch: analyzers now enforce an output
+  CONTRACT via `finalize()`, so no internal failure can ever emit an invalid check id or drop a
+  check. The blocked-homepage bug was the subtlest — a consent wall looked like a mid-scoring site
+  because a healthy secondary page was graded in its place.
+  Test count 349 -> 647.

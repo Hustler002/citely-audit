@@ -31,6 +31,10 @@ from urllib.parse import urlparse
 
 log = logging.getLogger("entity-corroboration-audit")
 
+CHECKS = ["entity.structured_data_present", "entity.organization_declared",
+          "entity.sameas_present", "entity.sameas_authority",
+          "entity.opengraph_identity", "entity.name_consistency"]
+
 MAX_EVIDENCE = 300
 MAX_JSONLD_BYTES = 512 * 1024      # a single block larger than this is not legitimate markup
 MAX_JSONLD_DEPTH = 20              # bounds traversal on adversarial nesting
@@ -92,6 +96,64 @@ def soup_of(html: str):
         except Exception:
             continue
     return None
+
+# --- Resilience helpers -------------------------------------------------------------------------
+# Artifacts may be replayed from disk, hand-written or truncated. Every accessor degrades to an
+# empty value rather than raising: an analyzer that throws takes the whole audit down with it.
+
+def safe_pages(artifact) -> list:
+    if not isinstance(artifact, dict):
+        return []
+    pages = artifact.get("pages")
+    if not isinstance(pages, list):
+        return []
+    return [p for p in pages if isinstance(p, dict)]
+
+
+def page_html(page) -> str:
+    if not isinstance(page, dict):
+        return ""
+    raw = page.get("raw")
+    if not isinstance(raw, dict):
+        return ""
+    html = raw.get("html")
+    return html if isinstance(html, str) else ""
+
+
+def rendered_html(page) -> str:
+    if not isinstance(page, dict):
+        return ""
+    rendered = page.get("rendered")
+    if isinstance(rendered, dict) and rendered.get("available"):
+        html = rendered.get("html")
+        if isinstance(html, str) and html:
+            return html
+    return page_html(page)
+
+
+def finalize(results, page_url=None) -> list:
+    """Guarantee the output contract: exactly CHECKS, every id valid, no duplicates.
+
+    Without this, an internal exception produced a result keyed by the FUNCTION name, which the
+    scoring engine rejects as registry drift — crashing the orchestrator and losing the real check.
+    """
+    by_id, extras = {}, []
+    for row in results or []:
+        if not isinstance(row, dict):
+            continue
+        cid = row.get("check_id")
+        if cid in CHECKS and cid not in by_id:
+            by_id[cid] = row
+        elif cid not in CHECKS:
+            extras.append(cid)
+    for cid in CHECKS:
+        if cid not in by_id:
+            reason = "analyzer produced no result for this check"
+            if extras:
+                reason += f" (internal error in {extras[0]})"
+            by_id[cid] = result(cid, "unknown", page_url=page_url, reason=reason)
+    return [by_id[cid] for cid in CHECKS]
+
 
 
 def _flatten(node, depth: int = 0):
@@ -310,49 +372,54 @@ def artifact_from_html_file(path: str) -> dict:
 
 
 def analyze(artifact: dict, registry: dict) -> list:
-    checks = ["entity.structured_data_present", "entity.organization_declared",
-              "entity.sameas_present", "entity.sameas_authority",
-              "entity.opengraph_identity", "entity.name_consistency"]
+    if isinstance(artifact, dict) and artifact.get("blocked_before_fetch"):
+        return finalize([result(c, "unknown", reason="blocked_before_fetch") for c in CHECKS])
 
-    if artifact.get("blocked_before_fetch"):
-        return [result(c, "unknown", reason="blocked_before_fetch") for c in checks]
-
-    pages = artifact.get("pages") or []
-    usable = [p for p in pages if p.get("status") == "ok" and (p.get("raw") or {}).get("html")]
+    pages = safe_pages(artifact)
+    usable = [p for p in pages if p.get("status") == "ok" and page_html(p)]
     if not usable:
         reason = "no page could be read"
         if pages and pages[0].get("blocked_kind"):
             reason = f"page blocked: {pages[0]['blocked_kind']}"
-        return [result(c, "unknown", reason=reason,
-                       page_url=pages[0].get("url") if pages else None) for c in checks]
+        url = pages[0].get("url") if pages else None
+        return finalize([result(c, "unknown", reason=reason, page_url=url) for c in CHECKS], url)
 
     # Prefer the rendered DOM when available: entity markup is sometimes injected by tag managers.
     pages_data = []
     for p in usable:
-        rendered = p.get("rendered") or {}
-        html = rendered.get("html") if rendered.get("available") else None
-        html = html or (p.get("raw") or {}).get("html") or ""
-        pages_data.append((p.get("url"), extract_jsonld(html), extract_opengraph(html),
-                           has_microdata(html), html))
+        html = rendered_html(p)
+        try:
+            pages_data.append((p.get("url"), extract_jsonld(html), extract_opengraph(html),
+                               has_microdata(html), html))
+        except Exception as exc:  # a single unparseable page must not sink the others
+            log.warning("extraction failed for %s: %s", p.get("url"), exc)
+            pages_data.append((p.get("url"), [], {}, False, ""))
+    if not pages_data:
+        return finalize([], None)
 
     accepted = thresholds_for("entity.organization_declared", registry).get(
         "accepted_types", DEFAULT_THRESHOLDS["entity.organization_declared"]["accepted_types"])
 
     out = []
-    for fn, args in (
-        (check_structured_data_present, (pages_data,)),
-        (check_organization_declared, (pages_data, thresholds_for("entity.organization_declared", registry))),
-        (check_sameas_present, (pages_data, thresholds_for("entity.sameas_present", registry), accepted)),
-        (check_sameas_authority, (pages_data, thresholds_for("entity.sameas_authority", registry), accepted)),
-        (check_opengraph_identity, (pages_data, thresholds_for("entity.opengraph_identity", registry))),
-        (check_name_consistency, (pages_data, accepted)),
+    for check_id, fn, args in (
+        ("entity.structured_data_present", check_structured_data_present, (pages_data,)),
+        ("entity.organization_declared", check_organization_declared,
+         (pages_data, thresholds_for("entity.organization_declared", registry))),
+        ("entity.sameas_present", check_sameas_present,
+         (pages_data, thresholds_for("entity.sameas_present", registry), accepted)),
+        ("entity.sameas_authority", check_sameas_authority,
+         (pages_data, thresholds_for("entity.sameas_authority", registry), accepted)),
+        ("entity.opengraph_identity", check_opengraph_identity,
+         (pages_data, thresholds_for("entity.opengraph_identity", registry))),
+        ("entity.name_consistency", check_name_consistency, (pages_data, accepted)),
     ):
         try:
             out.append(fn(*args))
         except Exception as exc:
-            log.warning("%s failed: %s", fn.__name__, exc)
-            out.append(result(fn.__name__, "unknown", reason=f"analyzer error: {exc}"))
-    return out
+            log.warning("%s failed: %s", check_id, exc)
+            out.append(result(check_id, "unknown", page_url=pages_data[0][0],
+                              reason=f"analyzer error: {type(exc).__name__}"))
+    return finalize(out, pages_data[0][0])
 
 
 def main(argv=None) -> int:

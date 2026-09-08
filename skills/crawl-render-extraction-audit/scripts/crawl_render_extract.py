@@ -42,6 +42,10 @@ _DIGIT_RE = re.compile(r"\d")
 
 MAX_EVIDENCE = 300
 
+CHECKS = ["access.http_ok", "access.ai_crawlers_allowed", "access.indexable",
+          "render.content_without_js", "extraction.semantic_html",
+          "extraction.facts_not_image_only"]
+
 DEFAULT_THRESHOLDS = {
     "render.content_without_js": {"min_visible_chars_raw": 500, "empty_floor_chars": 50},
     "extraction.facts_not_image_only": {"max_image_only_fact_ratio": 0.5,
@@ -150,6 +154,95 @@ def soup_of(html: str):
             continue
     return None
 
+# --- Resilience helpers -------------------------------------------------------------------------
+# The artifact is produced by our own orchestrator, but it may also be hand-written, replayed from
+# disk, or truncated. Every accessor below degrades to an empty value rather than raising, because
+# an analyzer that throws takes the entire audit down with it.
+
+def safe_pages(artifact) -> list:
+    """Page list from an artifact of any shape. A dict, string or None yields []."""
+    if not isinstance(artifact, dict):
+        return []
+    pages = artifact.get("pages")
+    if not isinstance(pages, list):
+        return []
+    return [p for p in pages if isinstance(p, dict)]
+
+
+def page_html(page) -> str:
+    """Raw HTML as a string. Non-string values (ints, None, lists) yield ''."""
+    if not isinstance(page, dict):
+        return ""
+    raw = page.get("raw")
+    if not isinstance(raw, dict):
+        return ""
+    html = raw.get("html")
+    return html if isinstance(html, str) else ""
+
+
+def rendered_html(page) -> str:
+    """Prefer the rendered DOM when a real render produced one; else the raw HTML."""
+    if not isinstance(page, dict):
+        return ""
+    rendered = page.get("rendered")
+    if isinstance(rendered, dict) and rendered.get("available"):
+        html = rendered.get("html")
+        if isinstance(html, str) and html:
+            return html
+    return page_html(page)
+
+
+def homepage_of(pages) -> dict | None:
+    """The page the audit was actually asked about.
+
+    Checks documented as homepage-authoritative must measure THIS page or nothing. Falling back to
+    whichever page happened to load would report another page's verdicts under the homepage's name
+    and hide the reason the homepage could not be read.
+    """
+    for page in pages:
+        if page.get("role") == "homepage":
+            return page
+    return pages[0] if pages else None
+
+
+def homepage_block_reason(home) -> str:
+    if home is None:
+        return "no page could be read"
+    if home.get("blocked_kind"):
+        return f"homepage blocked: {home['blocked_kind']}"
+    if home.get("status") == "error":
+        return f"homepage could not be fetched ({home.get('skip_reason') or 'error'})"
+    if home.get("status") == "skipped":
+        return f"homepage skipped ({home.get('skip_reason') or 'skipped'})"
+    return "homepage returned no readable HTML"
+
+
+def finalize(results, page_url=None) -> list:
+    """Guarantee the output contract: exactly CHECKS, every id valid, no duplicates.
+
+    This is what makes an internal error survivable. Previously an exception produced a result
+    keyed by the FUNCTION name, which the scoring engine rejects as registry drift — crashing the
+    orchestrator and losing the real check. Now anything unrecognised is dropped and any missing
+    check is reported honestly as `unknown`.
+    """
+    by_id, extras = {}, []
+    for row in results or []:
+        if not isinstance(row, dict):
+            continue
+        cid = row.get("check_id")
+        if cid in CHECKS and cid not in by_id:
+            by_id[cid] = row
+        elif cid not in CHECKS:
+            extras.append(cid)
+    for cid in CHECKS:
+        if cid not in by_id:
+            reason = "analyzer produced no result for this check"
+            if extras:
+                reason += f" (internal error in {extras[0]})"
+            by_id[cid] = result(cid, "unknown", page_url=page_url, reason=reason)
+    return [by_id[cid] for cid in CHECKS]
+
+
 
 # --- checks -----------------------------------------------------------------------------------
 def check_http_ok(page, url) -> dict:
@@ -195,7 +288,7 @@ def check_content_without_js(page, url, thresholds) -> dict:
     The render diff is supporting evidence (how much JavaScript adds), never the basis of the
     judgement — otherwise this check would silently become heuristic whenever no browser is present.
     """
-    raw_html = (page.get("raw") or {}).get("html") or ""
+    raw_html = page_html(page)
     minimum = int(thresholds.get("min_visible_chars_raw", 500))
     raw_len = len(visible_text(raw_html))
 
@@ -243,7 +336,7 @@ def check_content_without_js(page, url, thresholds) -> dict:
 
 
 def check_semantic_html(page, url) -> dict:
-    html = (page.get("raw") or {}).get("html") or ""
+    html = page_html(page)
     soup = soup_of(html)
     if soup is None:
         return result("extraction.semantic_html", "unknown", page_url=url,
@@ -273,7 +366,7 @@ def check_facts_not_image_only(page, url, thresholds) -> dict:
     described images are ignored, because a false 'your facts are trapped in pictures' finding on an
     unseen site is worse than a miss.
     """
-    html = (page.get("raw") or {}).get("html") or ""
+    html = page_html(page)
     soup = soup_of(html)
     if soup is None:
         return result("extraction.facts_not_image_only", "unknown", page_url=url,
@@ -332,40 +425,39 @@ def artifact_from_html_file(path: str) -> dict:
 
 def analyze(artifact: dict, registry: dict) -> list:
     """All six checks for this mechanic. Every failure degrades to `unknown`, never a crash."""
-    checks = ["access.http_ok", "access.ai_crawlers_allowed", "access.indexable",
-              "render.content_without_js", "extraction.semantic_html",
-              "extraction.facts_not_image_only"]
+    if isinstance(artifact, dict) and artifact.get("blocked_before_fetch"):
+        return finalize([result(c, "unknown", reason="blocked_before_fetch") for c in CHECKS])
 
-    if artifact.get("blocked_before_fetch"):
-        return [result(c, "unknown", reason="blocked_before_fetch") for c in checks]
+    pages = safe_pages(artifact)
+    home = homepage_of(pages)
+    # These checks are homepage-authoritative, so an unreadable homepage yields `unknown` with the
+    # real reason — never another page's verdicts wearing the homepage's name.
+    if home is None or home.get("status") != "ok" or not page_html(home):
+        reason = homepage_block_reason(home)
+        url = home.get("url") if home else None
+        return finalize([result(c, "unknown", reason=reason, page_url=url) for c in CHECKS], url)
 
-    pages = artifact.get("pages") or []
-    usable = [p for p in pages if p.get("status") == "ok" and (p.get("raw") or {}).get("html")]
-    if not usable:
-        reason = "no page could be read"
-        if pages and pages[0].get("blocked_kind"):
-            reason = f"page blocked: {pages[0]['blocked_kind']}"
-        return [result(c, "unknown", reason=reason,
-                       page_url=pages[0].get("url") if pages else None) for c in checks]
-
-    home = usable[0]
     url = home.get("url")
     out = []
-    for fn, args in (
-        (check_http_ok, (home, url)),
-        (check_ai_crawlers, (artifact, url)),
-        (check_indexable, (home, url)),
-        (check_content_without_js, (home, url, thresholds_for("render.content_without_js", registry))),
-        (check_semantic_html, (home, url)),
-        (check_facts_not_image_only, (home, url,
-                                      thresholds_for("extraction.facts_not_image_only", registry))),
+    # The check id travels WITH the call, so an internal error still reports against the real
+    # check rather than against a function name the registry has never heard of.
+    for check_id, fn, args in (
+        ("access.http_ok", check_http_ok, (home, url)),
+        ("access.ai_crawlers_allowed", check_ai_crawlers, (artifact, url)),
+        ("access.indexable", check_indexable, (home, url)),
+        ("render.content_without_js", check_content_without_js,
+         (home, url, thresholds_for("render.content_without_js", registry))),
+        ("extraction.semantic_html", check_semantic_html, (home, url)),
+        ("extraction.facts_not_image_only", check_facts_not_image_only,
+         (home, url, thresholds_for("extraction.facts_not_image_only", registry))),
     ):
         try:
             out.append(fn(*args))
         except Exception as exc:
-            log.warning("%s failed: %s", fn.__name__, exc)
-            out.append(result(fn.__name__, "unknown", reason=f"analyzer error: {exc}"))
-    return out
+            log.warning("%s failed: %s", check_id, exc)
+            out.append(result(check_id, "unknown", page_url=url,
+                              reason=f"analyzer error: {type(exc).__name__}"))
+    return finalize(out, url)
 
 
 def main(argv=None) -> int:

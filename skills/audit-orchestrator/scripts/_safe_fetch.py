@@ -219,11 +219,28 @@ def validate_url(url: str, config: dict) -> tuple:
     return p.scheme, host, port
 
 
+MAX_HOSTNAME_LEN = 253          # RFC 1035 limit on a fully-qualified domain name
+MAX_LABEL_LEN = 63              # RFC 1035 limit on a single dot-separated label
+
+
 def resolve_host(host: str, port: int) -> list:
     """Resolve to every A/AAAA record. All of them must pass validation, not merely the first."""
+    # Reject impossible hostnames before touching the resolver. An over-long name makes
+    # socket.getaddrinfo raise UnicodeError from the IDNA codec — an exception type that is not a
+    # gaierror and would therefore escape safe_get entirely, crashing the orchestrator.
+    if len(host) > MAX_HOSTNAME_LEN:
+        raise UnsafeURLError(f"hostname exceeds {MAX_HOSTNAME_LEN} characters")
+    if any(len(label) > MAX_LABEL_LEN for label in host.split(".")):
+        raise UnsafeURLError(f"hostname label exceeds {MAX_LABEL_LEN} characters")
+
     try:
         infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
+        raise UnsafeURLError(f"DNS resolution failed for {host}: {exc}") from exc
+    except UnicodeError as exc:
+        # IDNA/punycode encoding failure on a malformed international hostname.
+        raise UnsafeURLError(f"hostname could not be encoded for DNS: {exc}") from exc
+    except Exception as exc:  # resolver quirks must never escape this boundary
         raise UnsafeURLError(f"DNS resolution failed for {host}: {exc}") from exc
     ips = []
     for info in infos:
@@ -408,6 +425,12 @@ def safe_get(url: str, config: dict, *, deadline: float | None = None,
         result.error, result.error_kind = f"request failed: {exc}", "network"
     except FetchError as exc:
         result.error, result.error_kind = str(exc), "fetch"
+    except Exception as exc:
+        # Last-resort net. safe_get is the orchestrator's network boundary and its contract is that
+        # it NEVER raises: an unanticipated exception here (a resolver quirk, a urllib3 edge case)
+        # would otherwise abort the whole audit instead of degrading one page.
+        log.exception("unexpected error fetching %s", result.requested_url)
+        result.error, result.error_kind = f"unexpected error: {type(exc).__name__}", "unexpected"
     finally:
         result.elapsed_ms = int((time.monotonic() - started) * 1000)
 

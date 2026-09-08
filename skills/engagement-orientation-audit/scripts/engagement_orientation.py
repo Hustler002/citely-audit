@@ -107,6 +107,130 @@ def soup_of(html: str):
             continue
     return None
 
+# --- Resilience helpers -------------------------------------------------------------------------
+# Artifacts may be replayed from disk, hand-written or truncated. Every accessor degrades to an
+# empty value rather than raising: an analyzer that throws takes the whole audit down with it.
+
+def safe_pages(artifact) -> list:
+    if not isinstance(artifact, dict):
+        return []
+    pages = artifact.get("pages")
+    if not isinstance(pages, list):
+        return []
+    return [p for p in pages if isinstance(p, dict)]
+
+
+def page_html(page) -> str:
+    if not isinstance(page, dict):
+        return ""
+    raw = page.get("raw")
+    if not isinstance(raw, dict):
+        return ""
+    html = raw.get("html")
+    return html if isinstance(html, str) else ""
+
+
+def rendered_html(page) -> str:
+    if not isinstance(page, dict):
+        return ""
+    rendered = page.get("rendered")
+    if isinstance(rendered, dict) and rendered.get("available"):
+        html = rendered.get("html")
+        if isinstance(html, str) and html:
+            return html
+    return page_html(page)
+
+
+def homepage_of(pages) -> dict | None:
+    """The page the audit was actually asked about.
+
+    Checks documented as homepage-authoritative must measure THIS page or nothing. Falling back to
+    whichever page happened to load would report another page's verdicts under the homepage's name
+    and hide the reason the homepage could not be read.
+    """
+    for page in pages:
+        if page.get("role") == "homepage":
+            return page
+    return pages[0] if pages else None
+
+
+def homepage_block_reason(home) -> str:
+    if home is None:
+        return "no page could be read"
+    if home.get("blocked_kind"):
+        return f"homepage blocked: {home['blocked_kind']}"
+    if home.get("status") == "error":
+        return f"homepage could not be fetched ({home.get('skip_reason') or 'error'})"
+    if home.get("status") == "skipped":
+        return f"homepage skipped ({home.get('skip_reason') or 'skipped'})"
+    return "homepage returned no readable HTML"
+
+
+def finalize(results, page_url=None) -> list:
+    """Guarantee the output contract: exactly CHECKS, every id valid, no duplicates.
+
+    Without this, an internal exception produced a result keyed by the FUNCTION name, which the
+    scoring engine rejects as registry drift — crashing the orchestrator and losing the real check.
+    """
+    by_id, extras = {}, []
+    for row in results or []:
+        if not isinstance(row, dict):
+            continue
+        cid = row.get("check_id")
+        if cid in CHECKS and cid not in by_id:
+            by_id[cid] = row
+        elif cid not in CHECKS:
+            extras.append(cid)
+    for cid in CHECKS:
+        if cid not in by_id:
+            reason = "analyzer produced no result for this check"
+            if extras:
+                reason += f" (internal error in {extras[0]})"
+            by_id[cid] = result(cid, "unknown", page_url=page_url, reason=reason)
+    return [by_id[cid] for cid in CHECKS]
+
+
+def safe_geometry(page) -> dict:
+    """Geometry with every field type-checked.
+
+    Tier-A geometry is produced by JavaScript running in a hostile page. A site can return
+    unexpected shapes (nulls, strings where numbers belong), so each field is validated here rather
+    than at a dozen call sites — wrong types previously turned real checks into `unknown`.
+    """
+    if not isinstance(page, dict):
+        return {}
+    rendered = page.get("rendered")
+    if not isinstance(rendered, dict):
+        return {}
+    geo = rendered.get("geometry")
+    if not isinstance(geo, dict) or not geo:
+        return {}
+
+    def num(value):
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+    def rows(key):
+        items = geo.get(key)
+        if not isinstance(items, list):
+            return []
+        out = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            out.append({"tag": item.get("tag") if isinstance(item.get("tag"), str) else "",
+                        "top": num(item.get("top")),
+                        "text": item.get("text") if isinstance(item.get("text"), str) else "",
+                        "coverage": num(item.get("coverage"))})
+        return out
+
+    text = geo.get("above_fold_text")
+    return {"viewport_height": num(geo.get("viewport_height")),
+            "body_font_px": num(geo.get("body_font_px")),
+            "above_fold_text": text if isinstance(text, str) else "",
+            "headings": rows("headings"), "interactive": rows("interactive"),
+            "overlays": rows("overlays")}
+
+
 
 def body_prefix(html: str, limit: int) -> str:
     """The first `limit` characters of <body> — the DOM-order stand-in for 'above the fold'."""
@@ -313,27 +437,25 @@ def artifact_from_html_file(path: str) -> dict:
 
 
 def analyze(artifact: dict, registry: dict) -> list:
-    if artifact.get("blocked_before_fetch"):
-        return [result(c, "unknown", reason="blocked_before_fetch") for c in CHECKS]
+    if isinstance(artifact, dict) and artifact.get("blocked_before_fetch"):
+        return finalize([result(c, "unknown", reason="blocked_before_fetch") for c in CHECKS])
 
-    pages = artifact.get("pages") or []
-    usable = [p for p in pages if p.get("status") == "ok" and (p.get("raw") or {}).get("html")]
-    if not usable:
-        reason = "no page could be read"
-        if pages and pages[0].get("blocked_kind"):
-            reason = f"page blocked: {pages[0]['blocked_kind']}"
-        return [result(c, "unknown", reason=reason,
-                       page_url=pages[0].get("url") if pages else None) for c in CHECKS]
+    pages = safe_pages(artifact)
+    home = homepage_of(pages)
+    # These checks are homepage-authoritative, so an unreadable homepage yields `unknown` with the
+    # real reason — never another page's verdicts wearing the homepage's name.
+    if home is None or home.get("status") != "ok" or not page_html(home):
+        reason = homepage_block_reason(home)
+        url = home.get("url") if home else None
+        return finalize([result(c, "unknown", reason=reason, page_url=url) for c in CHECKS], url)
 
-    home = usable[0]
     url = home.get("url")
-    rendered = home.get("rendered") or {}
-    geometry = rendered.get("geometry") or {}
-    html = (rendered.get("html") if rendered.get("available") else None) or \
-           (home.get("raw") or {}).get("html") or ""
+    geometry = safe_geometry(home)
+    html = rendered_html(home)
     soup = soup_of(html)
 
-    language = artifact.get("language") or {}
+    language = artifact.get("language")
+    language = language if isinstance(language, dict) else {}
     lang_ok = bool(language.get("supported"))
     lang_tag = language.get("detected")
 
@@ -351,7 +473,8 @@ def analyze(artifact: dict, registry: dict) -> list:
             out.append(fn(*args))
         except Exception as exc:
             log.warning("%s failed: %s", check_id, exc)
-            out.append(result(check_id, "unknown", reason=f"analyzer error: {exc}"))
+            out.append(result(check_id, "unknown", page_url=url,
+                              reason=f"analyzer error: {type(exc).__name__}"))
 
     if lang_ok:
         try:
@@ -369,8 +492,9 @@ def analyze(artifact: dict, registry: dict) -> list:
     try:
         out.append(check_legibility(geometry, url, thresholds_for("orientation.legibility", registry)))
     except Exception as exc:
-        out.append(result("orientation.legibility", "unknown", reason=f"analyzer error: {exc}"))
-    return out
+        out.append(result("orientation.legibility", "unknown", page_url=url,
+                          reason=f"analyzer error: {type(exc).__name__}"))
+    return finalize(out, url)
 
 
 def main(argv=None) -> int:
