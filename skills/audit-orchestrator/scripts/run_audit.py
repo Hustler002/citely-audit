@@ -11,8 +11,9 @@ Pipeline (PLAN.md §3):
                                                      +-- single cross-boundary contract
 
 Contract:
-  * The report goes to STDOUT and nothing else does. All logs go to stderr, so the output is
-    machine-consumable by a pipe.
+  * The report goes to STDOUT and nothing else does — see `configure_logging` and
+    `stdout_reserved_for_report`, which ENFORCE that rather than relying on everyone remembering.
+    All logs go to stderr, so the output is machine-consumable by a pipe.
   * The report always validates against references/report-schema.json.
   * It NEVER crashes. Every stage records its failure into diagnostics.errors[] and the audit
     still emits a valid report — an audit that dies tells the user nothing.
@@ -24,6 +25,7 @@ it from untrusted input would reintroduce full SSRF exposure. See `_assert_no_ss
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import logging
@@ -39,6 +41,64 @@ import _safe_fetch as fetch_mod
 import _scoring as scoring
 
 log = logging.getLogger("orchestrator")
+
+LOG_FORMAT = "%(levelname)s %(name)s: %(message)s"
+MAX_FORWARDED_STDERR = 20000
+
+
+def configure_logging(level: int = logging.INFO) -> None:
+    """Send every log record to stderr, and mean it.
+
+    `logging.basicConfig` is a SILENT NO-OP when the root logger already has a handler. Verified,
+    not assumed: with a dependency calling `basicConfig(stream=sys.stdout)` at import time, our
+    call changes nothing, the record lands on STDOUT and even our format is ignored. That is one
+    `import` away from putting plain text in front of the JSON a CI job parses.
+
+    `force=True` removes any handler installed before us. It is the load-bearing argument here;
+    without it this function is decoration.
+    """
+    logging.basicConfig(stream=sys.stderr, level=level, force=True, format=LOG_FORMAT)
+
+
+class _StderrRedirect:
+    """A stdout stand-in that diverts everything to stderr and remembers that it happened."""
+
+    def __init__(self, stderr):
+        self._stderr = stderr
+        self.leaked_chars = 0
+
+    def write(self, text):
+        if text:
+            self.leaked_chars += len(text)
+        return self._stderr.write(text)
+
+    def __getattr__(self, name):
+        return getattr(self._stderr, name)
+
+
+@contextlib.contextmanager
+def stdout_reserved_for_report():
+    """Hold stdout closed for the duration of the audit, so only the report can reach it.
+
+    `configure_logging` fixes handlers that exist when we start. It cannot fix a library imported
+    LATER in the run — Playwright is imported inside the render stage — nor a bare `print()` in any
+    dependency, which is not logging at all and carries no stream configuration to correct.
+
+    While this is active `sys.stdout` IS stderr, so a handler constructed mid-run with
+    `stream=sys.stdout` binds to stderr too. Anything written is counted and reported, because a
+    silent diversion would hide a real bug just as effectively as the leak would cause one.
+    """
+    real_stdout = sys.stdout
+    proxy = _StderrRedirect(sys.stderr)
+    sys.stdout = proxy
+    try:
+        yield real_stdout
+    finally:
+        sys.stdout = real_stdout
+        if proxy.leaked_chars:
+            log.warning("%d characters were written to stdout during the audit and were diverted "
+                        "to stderr to keep the report parseable", proxy.leaked_chars)
+
 
 HERE = Path(__file__).resolve().parent
 SKILLS_DIR = HERE.parent.parent
@@ -112,6 +172,17 @@ def run_analyzer(skill: str, script: str, artifact_path: Path, errors: list,
         errors.append({"stage": "analyze", "type": "spawn_failed",
                        "message": f"{skill}: {type(exc).__name__}"})
         return []
+
+    # `capture_output=True` pipes the child's stderr as well as its stdout, so an analyzer's logs
+    # were being swallowed entirely rather than reaching the operator. Forward them, tagged and
+    # capped: they are the only diagnostic a failing analyzer produces, but the child is also the
+    # component holding page-derived text, so it does not get an unbounded channel.
+    if proc.stderr:
+        for line in proc.stderr[:MAX_FORWARDED_STDERR].splitlines():
+            if line.strip():
+                sys.stderr.write(f"[{skill}] {line}\n")
+        if len(proc.stderr) > MAX_FORWARDED_STDERR:
+            sys.stderr.write(f"[{skill}] ... stderr truncated at {MAX_FORWARDED_STDERR} chars\n")
 
     if proc.returncode != 0:
         errors.append({"stage": "analyze", "type": "exit_code",
@@ -337,6 +408,11 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
             "crawl_ms": (artifact.get("timing") or {}).get("total_ms", 0),
             "playwright_available": bool(rendered.get("available")),
             "render_mode": rendered.get("mode") or render_mod.TIER_B,
+            # How the render went, not merely whether it happened. "salvaged" means the navigation
+            # milestone timed out and the DOM was harvested anyway, which is a Tier-A result a
+            # reader deserves to be able to tell apart from a clean one.
+            "render_nav_state": rendered.get("nav_state"),
+            "render_wait_strategy": rendered.get("wait_strategy"),
             "pages_checked": [p.get("url") for p in pages],
             "pages": [{"url": p.get("url"), "status": p.get("status", "error"),
                        "http_status": (p.get("raw") or {}).get("status"),
@@ -385,8 +461,7 @@ def main(argv=None) -> int:
     _assert_no_ssrf_bypass_via_cli(parser)
     args = parser.parse_args(argv)
 
-    logging.basicConfig(stream=sys.stderr, level=logging.INFO,
-                        format="%(levelname)s %(name)s: %(message)s")
+    configure_logging()
 
     try:
         config = load_json(Path(args.config))
@@ -398,25 +473,29 @@ def main(argv=None) -> int:
         log.warning("fetch.allow_private_hosts is ENABLED — the SSRF guard is disabled. "
                     "This must only ever be true in tests.")
 
-    try:
-        report = audit(args.url, args.html_file, config,
-                       allow_external=args.allow_external)
-    except Exception as exc:
-        # Belt and braces: the stages already trap their own failures, but the entrypoint must
-        # still emit something valid rather than a traceback.
-        log.exception("audit failed unexpectedly")
-        report = {"site": args.url or args.html_file or "unknown",
-                  "audited_at": artifact_mod.utc_now(),
-                  "summary": {"total_findings": 0, "critical": 0, "high": 0, "medium": 0},
-                  "findings": [], "partial": True, "partial_reason": "analyzer_failed",
-                  "diagnostics": {"errors": [{"stage": "orchestrator", "type": "fatal",
-                                              "message": type(exc).__name__}]}}
+    # Everything from here to the report runs with stdout held shut, so no stage, dependency or
+    # stray `print()` can put a byte in front of the JSON.
+    with stdout_reserved_for_report() as report_stream:
+        try:
+            report = audit(args.url, args.html_file, config,
+                           allow_external=args.allow_external)
+        except Exception as exc:
+            # Belt and braces: the stages already trap their own failures, but the entrypoint must
+            # still emit something valid rather than a traceback.
+            log.exception("audit failed unexpectedly")
+            report = {"site": args.url or args.html_file or "unknown",
+                      "audited_at": artifact_mod.utc_now(),
+                      "summary": {"total_findings": 0, "critical": 0, "high": 0, "medium": 0},
+                      "findings": [], "partial": True, "partial_reason": "analyzer_failed",
+                      "diagnostics": {"errors": [{"stage": "orchestrator", "type": "fatal",
+                                                  "message": type(exc).__name__}]}}
 
-    for problem in validate_report(report):
-        log.error("report validation: %s", problem)
+        for problem in validate_report(report):
+            log.error("report validation: %s", problem)
 
-    json.dump(report, sys.stdout, indent=2, ensure_ascii=False)
-    sys.stdout.write("\n")
+    json.dump(report, report_stream, indent=2, ensure_ascii=False)
+    report_stream.write("\n")
+    report_stream.flush()
 
     if args.ci and report.get("summary", {}).get("critical", 0) > 0:
         return 1

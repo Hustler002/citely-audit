@@ -132,6 +132,8 @@ def _page_entry(candidate, fetch_result, render_result, config) -> dict:
             "viewport": render_result.viewport,
             "heuristic_signals": render_result.heuristic_signals,
             "geometry": render_result.geometry,
+            "nav_state": render_result.nav_state,
+            "wait_strategy": render_result.wait_strategy,
         }
     return entry
 

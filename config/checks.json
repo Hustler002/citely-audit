@@ -357,11 +357,11 @@
       "signal": "Presence of parseable JSON-LD, microdata or RDFa",
       "impact": "Without structured data an AI must infer identity from prose, which is where mistaken-identity and hallucination begin.",
       "plain_summary": "Your page includes machine-readable information about itself.",
-      "remediation": "Add a JSON-LD block describing this page, so machines read structured facts instead of inferring identity from prose.",
+      "remediation": "Add a JSON-LD block describing this page. Open Graph tags are not a substitute: they drive social previews and carry no schema.org type, so a machine still cannot tell what kind of thing this page is about.",
       "failure_title": "No structured data on the page",
-      "failure_summary": "Your page has no machine-readable information about itself.",
-      "partial_title": "Structured data is incomplete",
-      "partial_summary": "Your page has some machine-readable information, but not the richest kind."
+      "failure_summary": "Your page has no machine-readable description of what it is about.",
+      "partial_title": "Structured data uses the older format",
+      "partial_summary": "Your page has microdata but no JSON-LD, which is the format answer engines read most reliably."
     },
     {
       "id": "entity.organization_declared",
@@ -371,7 +371,7 @@
       "confidence_class": "verified",
       "kind": "structural",
       "depends_on": [
-        "entity.structured_data_present"
+        "render.content_without_js"
       ],
       "requires_language": false,
       "threshold": {
@@ -380,8 +380,54 @@
           "Person",
           "LocalBusiness",
           "Corporation",
-          "NGO"
-        ]
+          "NGO",
+          "NewsMediaOrganization",
+          "EducationalOrganization",
+          "GovernmentOrganization",
+          "SportsOrganization",
+          "Airline",
+          "Consortium",
+          "Cooperative",
+          "MedicalOrganization",
+          "PerformingGroup",
+          "Project",
+          "Brand",
+          "Store",
+          "Restaurant",
+          "Dentist",
+          "Physician",
+          "LegalService",
+          "HomeAndConstructionBusiness",
+          "FoodEstablishment",
+          "HealthAndBeautyBusiness",
+          "AutomotiveBusiness",
+          "FinancialService",
+          "ProfessionalService",
+          "EntertainmentBusiness",
+          "LodgingBusiness",
+          "TravelAgency"
+        ],
+        "identity_properties": [
+          "address",
+          "telephone",
+          "email",
+          "sameAs",
+          "logo",
+          "founder",
+          "vatID",
+          "taxID",
+          "openingHours",
+          "openingHoursSpecification",
+          "geo",
+          "contactPoint",
+          "hasMap",
+          "aggregateRating",
+          "duns",
+          "leiCode",
+          "naics",
+          "isicV4"
+        ],
+        "min_identity_properties": 2
       },
       "title": "An organization or person entity is declared",
       "signal": "A schema.org entity of an accepted identity type in the structured data graph",
@@ -401,7 +447,7 @@
       "confidence_class": "verified",
       "kind": "structural",
       "depends_on": [
-        "entity.organization_declared"
+        "render.content_without_js"
       ],
       "requires_language": false,
       "threshold": {
@@ -409,11 +455,13 @@
       },
       "title": "sameAs cross-references present",
       "signal": "sameAs property on the declared entity",
-      "impact": "sameAs links let an AI corroborate identity across the web instead of guessing between similarly named entities.",
+      "impact": "sameAs links let an AI corroborate your identity across the web instead of guessing between similarly named businesses.",
       "plain_summary": "You link out to your other official profiles.",
-      "remediation": "Add sameAs links from your Organization entry to your official profiles elsewhere on the web.",
-      "failure_title": "No sameAs cross-references",
-      "failure_summary": "You do not link out to your other official profiles."
+      "remediation": "Add sameAs links from your Organization entry to the profiles and listings you already link to, such as your Google Business, Facebook or LinkedIn page. If you have no structured data yet, rel=\"me\" on those links is a valid alternative.",
+      "failure_title": "Your identity is not linked to anything else",
+      "failure_summary": "Nothing on the page connects you to your profiles or listings elsewhere on the web.",
+      "partial_title": "Your profiles are linked but not declared",
+      "partial_summary": "You link to your own profiles, but not in a way that states they are you."
     },
     {
       "id": "entity.sameas_authority",
@@ -423,27 +471,96 @@
       "confidence_class": "verified",
       "kind": "structural",
       "depends_on": [
-        "entity.sameas_present"
+        "render.content_without_js"
       ],
       "requires_language": false,
       "threshold": {
         "authority_domains": [
           "wikidata.org",
           "wikipedia.org",
-          "crunchbase.com",
-          "linkedin.com",
-          "github.com",
+          "dbpedia.org",
+          "viaf.org",
+          "isni.org",
           "ror.org",
-          "isni.org"
+          "orcid.org",
+          "crunchbase.com",
+          "opencorporates.com",
+          "companieshouse.gov.uk",
+          "sec.gov",
+          "bloomberg.com",
+          "linkedin.com",
+          "g.page",
+          "business.site",
+          "maps.google.com",
+          "yelp.com",
+          "tripadvisor.com",
+          "trustpilot.com",
+          "bbb.org",
+          "glassdoor.com",
+          "indeed.com",
+          "yellowpages.com",
+          "thomasnet.com",
+          "angi.com",
+          "checkatrade.com",
+          "trustedtraders.which.co.uk",
+          "healthgrades.com",
+          "zocdoc.com",
+          "avvo.com",
+          "justia.com",
+          "github.com",
+          "gitlab.com"
+        ],
+        "social_profile_domains": [
+          "facebook.com",
+          "fb.com",
+          "instagram.com",
+          "twitter.com",
+          "x.com",
+          "youtube.com",
+          "tiktok.com",
+          "pinterest.com",
+          "threads.net",
+          "threads.com",
+          "snapchat.com",
+          "reddit.com",
+          "vimeo.com",
+          "flickr.com",
+          "tumblr.com",
+          "medium.com",
+          "substack.com",
+          "bsky.app",
+          "mastodon.social",
+          "weibo.com",
+          "vk.com",
+          "xing.com",
+          "line.me",
+          "t.me",
+          "telegram.me",
+          "whatsapp.com",
+          "wa.me"
+        ],
+        "share_path_markers": [
+          "/sharer",
+          "/share",
+          "/intent/",
+          "/shareartic",
+          "/submit",
+          "/dialog/",
+          "/send",
+          "/post?",
+          "/tweet",
+          "/pin/create"
         ]
       },
       "title": "At least one sameAs points to an authority node",
       "signal": "sameAs targets matched against known authority domains",
-      "impact": "Corroboration needs an anchor an AI already trusts. Links only to your own properties leave the identity chain unanchored.",
+      "impact": "Corroboration needs a record the brand does not control. Links only to your own accounts leave an AI unable to tell you apart from a similarly named business.",
       "plain_summary": "At least one of your links points somewhere authoritative.",
-      "remediation": "Include at least one sameAs link to an authority such as Wikidata, Wikipedia or Crunchbase, so the identity chain is anchored to a source AI systems already trust.",
-      "failure_title": "No sameAs link reaches an authority",
-      "failure_summary": "None of your links point somewhere AI systems already trust."
+      "remediation": "Link to at least one record somebody else maintains. A Google Business Profile, a Yelp or industry-directory listing, or a companies-registry entry all work; Wikidata or Wikipedia are the strongest but are not required.",
+      "failure_title": "Your identity is not anchored to any outside record",
+      "failure_summary": "Nothing you link to is a record maintained by someone other than you.",
+      "partial_title": "Your identity is anchored only to your own profiles",
+      "partial_summary": "You link to accounts you control, which cannot settle which business you are."
     },
     {
       "id": "entity.opengraph_identity",
@@ -481,17 +598,21 @@
       "confidence_class": "verified",
       "kind": "structural",
       "depends_on": [
-        "entity.organization_declared"
+        "render.content_without_js"
       ],
       "requires_language": false,
-      "threshold": null,
+      "threshold": {
+        "min_sources": 2
+      },
       "title": "Entity naming is internally consistent",
       "signal": "Entity name compared across JSON-LD blocks, Open Graph site name and the document title",
       "impact": "Contradictory names across blocks actively teach an AI the wrong association and are worse than no data at all.",
       "plain_summary": "Your brand name is stated the same way everywhere on the page.",
-      "remediation": "Use one exact spelling of your name across JSON-LD, Open Graph and the page title.",
+      "remediation": "State one exact spelling of your name in your JSON-LD entry, in og:site_name and in the page title, so the three agree.",
       "failure_title": "Entity naming is inconsistent",
-      "failure_summary": "Your brand name is written differently in different places."
+      "failure_summary": "Your brand name is written differently in different places.",
+      "partial_title": "Your name is stated, but nothing confirms it",
+      "partial_summary": "Your brand name appears in only one place, so nothing corroborates it."
     },
     {
       "id": "orientation.heading_first_viewport",
@@ -506,8 +627,10 @@
       "requires_language": false,
       "threshold": {
         "first_viewport_px": 800,
-        "dom_proxy_chars": 2500,
-        "_note": "Tier A uses real pixel offsets. Tier B falls back to a DOM-order proxy: an element appearing within the first dom_proxy_chars of <body> is treated as above the fold, and the verdict is labelled heuristic."
+        "dom_proxy_text_chars": 1200,
+        "chrome_text_weight": 0.1,
+        "chrome_text_cap": 400,
+        "_proxy_note": "Tier A uses real pixel offsets. Tier B falls back to a DOM-order proxy budgeted in VISIBLE TEXT, not markup: a raw markup slice is consumed by inline <svg>, critical-CSS <style> blocks and mega-menu markup long before it reaches the content. On python.org the first 16,151 characters of <body> hold 11,414 characters of tags and 1,345 of text. Chrome (<nav>, <header>, dialogs) is charged at chrome_text_weight per character up to chrome_text_cap, because a collapsed menu occupies one bar on screen however many links it holds; past that allowance its text costs full price, so wrapping a page in <nav> buys nothing. Verdicts from this path are labelled heuristic."
       },
       "title": "A heading appears in the first viewport",
       "signal": "Presence of an h1 or hero heading within the first viewport height",
@@ -530,7 +653,10 @@
       "requires_language": false,
       "threshold": {
         "first_viewport_px": 800,
-        "dom_proxy_chars": 2500
+        "dom_proxy_text_chars": 1200,
+        "chrome_text_weight": 0.1,
+        "chrome_text_cap": 400,
+        "_proxy_note": "Tier A uses real pixel offsets. Tier B falls back to a DOM-order proxy budgeted in VISIBLE TEXT, not markup: a raw markup slice is consumed by inline <svg>, critical-CSS <style> blocks and mega-menu markup long before it reaches the content. On python.org the first 16,151 characters of <body> hold 11,414 characters of tags and 1,345 of text. Chrome (<nav>, <header>, dialogs) is charged at chrome_text_weight per character up to chrome_text_cap, because a collapsed menu occupies one bar on screen however many links it holds; past that allowance its text costs full price, so wrapping a page in <nav> buys nothing. Verdicts from this path are labelled heuristic."
       },
       "title": "A primary action is available above the fold",
       "signal": "An anchor or button element positioned within the first viewport",
@@ -657,7 +783,11 @@
           "product"
         ],
         "min_text_chars": 80,
-        "_min_text_note": "Below this much above-the-fold text there is nothing that could constitute a value proposition, so the check fails outright rather than scoring an incidental keyword match (a 'Loading...' shell was matching the offering-noun 'app')."
+        "_min_text_note": "Below this much above-the-fold text there is nothing that could constitute a value proposition, so the check fails outright rather than scoring an incidental keyword match (a 'Loading...' shell was matching the offering-noun 'app').",
+        "dom_proxy_text_chars": 1200,
+        "chrome_text_weight": 0.1,
+        "chrome_text_cap": 400,
+        "_proxy_note": "Tier A uses real pixel offsets. Tier B falls back to a DOM-order proxy budgeted in VISIBLE TEXT, not markup: a raw markup slice is consumed by inline <svg>, critical-CSS <style> blocks and mega-menu markup long before it reaches the content. On python.org the first 16,151 characters of <body> hold 11,414 characters of tags and 1,345 of text. Chrome (<nav>, <header>, dialogs) is charged at chrome_text_weight per character up to chrome_text_cap, because a collapsed menu occupies one bar on screen however many links it holds; past that allowance its text costs full price, so wrapping a page in <nav> buys nothing. Verdicts from this path are labelled heuristic."
       },
       "title": "A value proposition is stated above the fold",
       "signal": "Above-the-fold text evaluated for an action plus an offering",

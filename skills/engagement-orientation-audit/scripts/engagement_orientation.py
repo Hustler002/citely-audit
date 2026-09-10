@@ -32,17 +32,35 @@ from pathlib import Path
 
 log = logging.getLogger("engagement-orientation-audit")
 
+
+LOG_FORMAT = "%(levelname)s %(name)s: %(message)s"
+
+
+def configure_logging(level: int = logging.INFO) -> None:
+    """Send every log record to stderr, and mean it.
+
+    `logging.basicConfig` is a SILENT NO-OP when the root logger already has a handler, so a
+    dependency that configured logging at import time keeps its handler AND its stream. Verified:
+    with a library calling `basicConfig(stream=sys.stdout)` first, our records land on stdout and
+    our format is ignored. This analyzer prints its check states to stdout, so that would corrupt
+    the contract the orchestrator parses. `force=True` is the load-bearing argument.
+    """
+    logging.basicConfig(stream=sys.stderr, level=level, force=True, format=LOG_FORMAT)
+
 MAX_EVIDENCE = 300
 _WS_RE = re.compile(r"\s+")
 _LANG_ATTR_RE = re.compile(
     r"<html[^>]*\blang\s*=\s*[\"']([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)[\"']", re.IGNORECASE)
 
+PROXY_DEFAULTS = {"dom_proxy_text_chars": 1200, "chrome_text_weight": 0.1, "chrome_text_cap": 400}
+
 DEFAULT_THRESHOLDS = {
-    "orientation.heading_first_viewport": {"first_viewport_px": 800, "dom_proxy_chars": 2500},
-    "orientation.primary_cta": {"first_viewport_px": 800, "dom_proxy_chars": 2500},
+    "orientation.heading_first_viewport": {"first_viewport_px": 800, **PROXY_DEFAULTS},
+    "orientation.primary_cta": {"first_viewport_px": 800, **PROXY_DEFAULTS},
     "orientation.content_not_obstructed": {"max_overlay_coverage": 0.4},
     "orientation.viewport_meta": {},
-    "orientation.value_proposition": {"first_viewport_px": 800, "min_signal_score": 1},
+    "orientation.value_proposition": {"first_viewport_px": 800, "min_signal_score": 1,
+                                      **PROXY_DEFAULTS},
     "orientation.legibility": {"min_body_font_px": 14},
 }
 
@@ -93,6 +111,14 @@ def supported_languages(config_path: str | None = None) -> list:
                 .get("supported", ["en"])]
     except Exception:
         return ["en"]
+
+
+try:
+    from bs4 import Comment, NavigableString, Tag
+except ImportError:
+    # bs4 absent. `soup_of` then returns None and every DOM check degrades to `unknown`, so these
+    # names are never reached; an empty tuple keeps `isinstance` valid rather than raising NameError.
+    Comment = NavigableString = Tag = ()
 
 
 def soup_of(html: str):
@@ -232,17 +258,242 @@ def safe_geometry(page) -> dict:
 
 
 
-def body_prefix(html: str, limit: int) -> str:
-    """The first `limit` characters of <body> — the DOM-order stand-in for 'above the fold'."""
-    if not html:
+# --- Tier-B fold window -------------------------------------------------------------------------
+# Subtrees that occupy no line box, so they must not consume the fold budget. Inline <svg> icon
+# sprites and a critical-CSS <style> block routinely run to tens of kilobytes while rendering as
+# nothing or as a 24px glyph.
+NON_RENDERING_TAGS = ("script", "style", "svg", "noscript", "template", "head", "link", "meta",
+                      "title", "canvas", "map", "iframe", "object", "embed")
+
+# Chrome floats or collapses instead of pushing content down the page, so it is charged at a
+# discount. `nav` and floating dialogs additionally cannot supply the page's headline: a consent
+# banner is not a value proposition, and a menu label is not a hero.
+NAV_TAGS, NAV_ROLES = ("nav",), ("navigation", "menu", "menubar", "search", "tablist")
+BANNER_TAGS, BANNER_ROLES = ("header",), ("banner",)
+FLOATING_TAGS, FLOATING_ROLES = ("dialog",), ("dialog", "alertdialog")
+HEADLINE_KINDS = (None, "banner")
+
+_HIDDEN_STYLE_RE = re.compile(r"(?:display\s*:\s*none|visibility\s*:\s*hidden)", re.IGNORECASE)
+MAX_WALK_NODES = 40000
+
+
+def _role_of(tag) -> str:
+    role = tag.get("role")
+    if isinstance(role, list):
+        role = " ".join(role)
+    return role.strip().lower() if isinstance(role, str) else ""
+
+
+def chrome_kind(tag) -> str | None:
+    """`"nav"`, `"banner"`, `"floating"` or None — landmarks and ARIA roles only.
+
+    Deliberately not class or id based: PLAN §8 forbids framework and CMS allowlists, and
+    `class="header"` means whatever the author wanted it to mean.
+    """
+    role = _role_of(tag)
+    if tag.name in NAV_TAGS or role in NAV_ROLES:
+        return "nav"
+    if tag.name in BANNER_TAGS or role in BANNER_ROLES:
+        return "banner"
+    if tag.name in FLOATING_TAGS or role in FLOATING_ROLES:
+        return "floating"
+    return None
+
+
+def is_hidden(tag) -> bool:
+    """Nodes present in the DOM but absent from the screen, so absent from the fold budget too."""
+    try:
+        if tag.has_attr("hidden"):
+            return True
+        if str(tag.get("aria-hidden", "")).strip().lower() == "true":
+            return True
+        style = tag.get("style")
+        return isinstance(style, str) and bool(_HIDDEN_STYLE_RE.search(style))
+    except Exception:
+        return False
+
+
+def element_text(el) -> str:
+    """Visible text, falling back to the accessible name of an image-only element.
+
+    A logo headline — `<h1><img alt="Acme"></h1>` — holds no text node yet is precisely what a
+    visitor sees on arrival. Tier A applies the same fallback, so the tiers cannot disagree.
+    """
+    try:
+        text = el.get_text(" ", strip=True)
+    except Exception:
         return ""
-    lowered = html.lower()
-    start = lowered.find("<body")
-    if start >= 0:
-        start = lowered.find(">", start) + 1
-    else:
-        start = 0
-    return html[start:start + limit]
+    if text:
+        return text
+    label = el.get("aria-label")
+    if isinstance(label, str) and label.strip():
+        return label.strip()
+    for img in el.find_all("img", limit=3):
+        alt = img.get("alt")
+        if isinstance(alt, str) and alt.strip():
+            return alt.strip()
+    return ""
+
+
+class FoldWindow:
+    """The Tier-B stand-in for 'what renders in the first screen'.
+
+    Replaces a raw markup slice, which measured the wrong quantity. On python.org the first 16,151
+    characters of `<body>` are 11,414 characters of tags and 1,345 of text, so a 2,500-character
+    markup budget never left the masthead: the first heading sat 6.5x beyond the cutoff and the
+    check reported "No heading near the top of the document" about a page whose hero is a heading.
+
+    Three corrections:
+      * non-rendering subtrees and hidden nodes are removed before anything is counted, so an
+        inline `<svg>` sprite or a critical-CSS block cannot consume the budget;
+      * the budget is spent in VISIBLE TEXT rather than in markup;
+      * chrome is charged at a discount, because a collapsed mega-menu occupies one bar on screen
+        however many links it holds. The discount is capped PER CHROME ROOT, so wrapping a page in
+        `<nav>` exhausts the budget at full price instead of buying unlimited free space.
+
+    The markup is parsed before it is measured, never sliced. Slicing at a character offset cuts
+    through tags and attribute values, handing the parser wreckage it then has to guess at.
+    """
+
+    def __init__(self, html: str, thresholds: dict):
+        self.budget = float(thresholds.get("dom_proxy_text_chars",
+                                           PROXY_DEFAULTS["dom_proxy_text_chars"]))
+        weight = float(thresholds.get("chrome_text_weight", PROXY_DEFAULTS["chrome_text_weight"]))
+        cap = float(thresholds.get("chrome_text_cap", PROXY_DEFAULTS["chrome_text_cap"]))
+        self.weight = min(max(weight, 0.0), 1.0)
+        self.cap = max(cap, 0.0)
+        self.body = None
+        self._offsets: dict = {}
+        self._kinds: dict = {}
+        self.total = 0.0
+        self.truncated = False
+        self._build(html)
+
+    # -- construction ---------------------------------------------------------------------------
+    def _build(self, html: str) -> None:
+        soup = soup_of(html)
+        if soup is None:
+            return
+        body = soup.body or soup
+        try:
+            for el in body.find_all(NON_RENDERING_TAGS):
+                el.decompose()
+            for comment in body.find_all(string=lambda s: isinstance(s, Comment)):
+                comment.extract()
+            for el in body.find_all(is_hidden):
+                el.decompose()
+        except Exception as exc:
+            log.warning("fold window pruning failed: %s", exc)
+        self.body = body
+        self._walk(body)
+
+    def _chrome_owners(self, body) -> dict:
+        """Map every node to the chrome root that owns it, so the discount is charged once."""
+        owners: dict = {}
+        try:
+            roots = [t for t in body.find_all(True) if chrome_kind(t) is not None]
+        except Exception:
+            return owners
+        for root in roots:
+            kind = chrome_kind(root)
+            if id(root) in owners:          # nested chrome belongs to the outermost root
+                continue
+            owners[id(root)] = (id(root), kind)
+            try:
+                for node in root.find_all(True):
+                    owners.setdefault(id(node), (id(root), kind))
+            except Exception:
+                continue
+        return owners
+
+    def _walk(self, body) -> None:
+        owners = self._chrome_owners(body)
+        # A chrome root's discount covers this many raw characters; past it, text costs full price.
+        allowance = (self.cap / self.weight) if self.weight > 0 else 0.0
+        seen_by_root: dict = {}
+        spent = 0.0
+        visited = 0
+
+        for node in body.descendants:
+            visited += 1
+            if visited > MAX_WALK_NODES:
+                self.truncated = True
+                break
+            if isinstance(node, Tag):
+                self._offsets[id(node)] = spent
+                self._kinds[id(node)] = owners.get(id(node), (None, None))[1]
+                continue
+            if not isinstance(node, NavigableString):
+                continue
+            parent = node.parent
+            if parent is None:
+                continue
+            length = len(str(node).strip())
+            if not length:
+                continue
+            root_id, _kind = owners.get(id(parent), (None, None))
+            if root_id is None:
+                spent += length
+                continue
+            used = seen_by_root.get(root_id, 0.0)
+            discounted = max(0.0, min(float(length), allowance - used))
+            spent += discounted * self.weight + (length - discounted)
+            seen_by_root[root_id] = used + length
+
+        self.total = spent
+
+    # -- queries --------------------------------------------------------------------------------
+    def usable(self) -> bool:
+        return self.body is not None
+
+    def offset(self, el) -> float:
+        return self._offsets.get(id(el), float("inf"))
+
+    def kind(self, el) -> str | None:
+        return self._kinds.get(id(el))
+
+    def above_fold(self, names, *, headline_only: bool = False) -> list:
+        """Elements of `names` that fall inside the window, in document order."""
+        if self.body is None:
+            return []
+        try:
+            candidates = self.body.find_all(names)
+        except Exception:
+            return []
+        out = []
+        for el in candidates:
+            if self.offset(el) >= self.budget:
+                continue
+            if headline_only and self.kind(el) not in HEADLINE_KINDS:
+                continue
+            if not element_text(el):
+                continue
+            out.append(el)
+        return out
+
+
+_FOLD_CACHE: dict = {}
+_FOLD_CACHE_MAX = 8
+
+
+def fold_window(html: str, thresholds: dict) -> FoldWindow:
+    """Build, or reuse, the fold window for `html`.
+
+    Three checks ask for the same window on the same page, and re-parsing a 50 KB document three
+    times per page across a five-page scan is render budget spent for nothing.
+    """
+    key = (hash(html or ""), len(html or ""),
+           thresholds.get("dom_proxy_text_chars"),
+           thresholds.get("chrome_text_weight"),
+           thresholds.get("chrome_text_cap"))
+    cached = _FOLD_CACHE.get(key)
+    if cached is not None:
+        return cached
+    window = FoldWindow(html or "", thresholds)
+    if len(_FOLD_CACHE) >= _FOLD_CACHE_MAX:
+        _FOLD_CACHE.clear()
+    _FOLD_CACHE[key] = window
+    return window
 
 
 # --- checks -----------------------------------------------------------------------------------
@@ -260,14 +511,15 @@ def check_heading_first_viewport(geometry, html, url, thresholds) -> dict:
                       evidence=f"No heading renders within the first {fold}px, so a visitor cannot "
                                f"confirm they landed in the right place")
 
-    prefix = body_prefix(html, int(thresholds.get("dom_proxy_chars", 2500)))
-    soup = soup_of(prefix)
-    headings = [h for h in (soup.find_all(["h1", "h2", "h3"]) if soup else [])
-                if h.get_text(strip=True)]
+    window = fold_window(html, thresholds)
+    if not window.usable():
+        return result("orientation.heading_first_viewport", "unknown", page_url=url,
+                      reason="page produced no parseable document body")
+    headings = window.above_fold(["h1", "h2", "h3"])
     if headings:
         return result("orientation.heading_first_viewport", "pass", measurement=len(headings),
                       page_url=url, reason=PROXY_NOTE,
-                      evidence=f"Heading near the top of the document: {headings[0].get_text(strip=True)}")
+                      evidence=f"Heading near the top of the document: {element_text(headings[0])}")
     return result("orientation.heading_first_viewport", "fail", measurement=0, page_url=url,
                   reason=PROXY_NOTE,
                   evidence="No heading near the top of the document")
@@ -290,14 +542,17 @@ def check_primary_cta(geometry, html, url, thresholds) -> dict:
                       evidence=f"No link or button renders within the first {fold}px, so there is "
                                f"no obvious next step for an arriving visitor")
 
-    prefix = body_prefix(html, int(thresholds.get("dom_proxy_chars", 2500)))
-    soup = soup_of(prefix)
-    elements = [] if soup is None else [
-        e for e in soup.find_all(["a", "button"]) if e.get_text(strip=True)]
+    window = fold_window(html, thresholds)
+    if not window.usable():
+        return result("orientation.primary_cta", "unknown", page_url=url,
+                      reason="page produced no parseable document body")
+    # Navigation links count here, unlike for the headline: a menu genuinely is a next step for an
+    # arriving visitor, even though it is not a statement of what the page offers.
+    elements = window.above_fold(["a", "button"])
     if elements:
         return result("orientation.primary_cta", "pass", measurement=len(elements), page_url=url,
                       reason=PROXY_NOTE,
-                      evidence=f"Actionable element near the top: {elements[0].get_text(strip=True)}")
+                      evidence=f"Actionable element near the top: {element_text(elements[0])}")
     return result("orientation.primary_cta", "fail", measurement=0, page_url=url,
                   reason=PROXY_NOTE, evidence="No link or button near the top of the document")
 
@@ -353,14 +608,17 @@ def prominent_text(geometry, html, thresholds) -> tuple:
         return (heading_text + " " + follow).strip(), heading_text, note
 
     note = PROXY_NOTE
-    prefix = body_prefix(html, int(thresholds.get("dom_proxy_chars", 2500)))
-    soup = soup_of(prefix)
-    if soup is None:
+    window = fold_window(html, thresholds)
+    if not window.usable():
         return "", "", note
-    heading = next((h for h in soup.find_all(["h1", "h2"]) if h.get_text(strip=True)), None)
-    if heading is None:
+    # `headline_only` excludes navigation and floating dialogs. A menu label is not a hero, a
+    # consent banner is not a value proposition, and excluding them is what stops the discount
+    # given to chrome from being farmed: wrapping the page in <nav> now yields no headline at all.
+    headings = window.above_fold(["h1", "h2"], headline_only=True)
+    if not headings:
         return "", "", note
-    heading_text = heading.get_text(" ", strip=True)
+    heading = headings[0]
+    heading_text = element_text(heading)
     follow = ""
     for sibling in heading.find_all_next(["p", "h2", "li"], limit=3):
         follow += " " + sibling.get_text(" ", strip=True)
@@ -505,7 +763,7 @@ def main(argv=None) -> int:
     parser.add_argument("--config", help="path to config/checks.json")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+    configure_logging()
     registry = load_registry(args.config)
     try:
         artifact = (json.loads(Path(args.artifact).read_text(encoding="utf-8"))

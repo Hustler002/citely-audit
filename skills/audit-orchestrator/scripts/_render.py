@@ -44,6 +44,31 @@ class RenderResult:
     heuristic_signals: dict = field(default_factory=dict)
     geometry: dict = field(default_factory=dict)
     error: str | None = None
+    # How the render actually went, disclosed rather than hidden behind `available`.
+    #   ok          — the navigation milestone fired
+    #   busy        — milestone fired, but the page never went quiet (beacons, sockets, polling)
+    #   salvaged    — the milestone timed out and the DOM was harvested anyway
+    nav_state: str | None = None
+    wait_strategy: str | None = None
+
+
+# --- Navigation policy ---------------------------------------------------------------------------
+# `networkidle` waits for 500 ms with at most two connections in flight. Analytics beacons, chat
+# widgets, long-polling and video players hold a modern page above that line indefinitely, so the
+# condition never fires and the entire render budget is spent waiting for it. python.org burned the
+# full 20 s this way and dropped to the browserless heuristic — while the page had been sitting
+# complete for 1.2 s. Measured on python.org: `load` 1.2 s, `domcontentloaded` 3.9 s,
+# `networkidle` 20.0 s and a timeout.
+#
+# So the milestone we WAIT on is one that actually fires, quiescence is a bounded bonus, and — the
+# part that generalises past this one cause — a navigation timeout SALVAGES the DOM instead of
+# discarding it. A timeout means "the milestone did not fire", not "there is no page": the same
+# python.org run that raised held a complete 68 KB document.
+NAV_MILESTONES = ("commit", "domcontentloaded", "load", "networkidle")
+DEFAULT_WAIT_UNTIL = "load"
+
+# Below this, `page.content()` is an empty shell (`about:blank`) rather than a page worth keeping.
+SALVAGE_FLOOR_CHARS = 200
 
 
 # Layout facts HTML alone cannot answer: what is genuinely above the fold, how large body text
@@ -67,6 +92,17 @@ GEOMETRY_JS = """
     for (const el of nodes) {
       let text = '';
       try { text = (el.innerText || el.textContent || '').trim().slice(0, 160); } catch (e) {}
+      // A logo headline — <h1><img alt="Acme"></h1> — has no text node, but it is exactly what a
+      // visitor sees on arrival. Fall back to the accessible name, which is also what the Tier-B
+      // proxy reads, so the two tiers cannot disagree about the same page.
+      if (!text) {
+        try {
+          const label = el.getAttribute('aria-label');
+          const img = el.querySelector('img[alt], [aria-label]');
+          text = ((label || (img && (img.getAttribute('alt') || img.getAttribute('aria-label'))) || '')
+                  + '').trim().slice(0, 160);
+        } catch (e) {}
+      }
       let fs = null;
       try { fs = px(getComputedStyle(el).fontSize); } catch (e) {}
       out[bucket].push({tag: el.tagName.toLowerCase(), top: topOf(el), text: text, font_px: fs});
@@ -209,13 +245,116 @@ def probe_playwright() -> tuple:
         return False, f"chromium unavailable: {exc}"
 
 
+def is_nav_timeout(exc: Exception) -> bool:
+    """True when navigation ran out of time, as opposed to genuinely failing.
+
+    The distinction decides whether the DOM is worth salvaging. A timeout leaves a loaded page
+    behind; `net::ERR_NAME_NOT_RESOLVED` or a refused connection does not.
+    """
+    if type(exc).__name__ == "TimeoutError":
+        return True
+    message = str(exc).lower()
+    return "timeout" in message and "exceeded" in message
+
+
+def is_blank_document(html: str | None) -> bool:
+    """True for the empty shell Chromium reports when navigation never produced a document."""
+    if not html or len(html) < SALVAGE_FLOOR_CHARS:
+        return True
+    return not visible_text(html) and "<body" not in html.lower()
+
+
+def resolve_wait_until(render_cfg: dict) -> str:
+    """Pick the navigation milestone, refusing the one that does not fire.
+
+    `networkidle` is still accepted from config for an operator who explicitly wants it, but it is
+    no longer the default and the downgrade is logged rather than silent.
+    """
+    configured = render_cfg.get("wait_until", DEFAULT_WAIT_UNTIL)
+    if configured not in NAV_MILESTONES:
+        log.warning("unknown wait_until %r; using %r", configured, DEFAULT_WAIT_UNTIL)
+        return DEFAULT_WAIT_UNTIL
+    return configured
+
+
+HARVEST_ATTEMPTS = 3
+HARVEST_BACKOFF_MS = 250
+
+
+def harvest_dom(page, budget_left_ms, attempts: int = HARVEST_ATTEMPTS) -> str:
+    """Read the DOM, retrying while the page is still swapping documents.
+
+    `page.content()` raises if it is called during a navigation. That is a transient state, not a
+    failure of the page, so retrying inside the remaining budget is the difference between a
+    salvaged render and a needless drop to Tier B.
+    """
+    last = None
+    for attempt in range(max(1, attempts)):
+        try:
+            return page.content()
+        except Exception as exc:
+            last = exc
+            if attempt == attempts - 1 or budget_left_ms() <= 0:
+                break
+            page.wait_for_timeout(min(HARVEST_BACKOFF_MS, budget_left_ms()))
+    raise last if last is not None else RuntimeError("could not read the rendered DOM")
+
+
+def drive_page(page, url: str, *, wait_until: str, nav_timeout_ms: int, quiet_ms: int,
+               settle_ms: int, budget_left_ms) -> tuple:
+    """Navigate `page` and harvest its DOM. Returns `(html, nav_state)`.
+
+    Split out from the browser plumbing so the policy that matters — which milestone we wait on,
+    what we do when it does not fire — can be tested against a stub instead of only against a live
+    site, where the interesting cases are whatever the network happens to be doing that day.
+    """
+    nav_state = "ok"
+    try:
+        page.goto(url, wait_until=wait_until, timeout=nav_timeout_ms)
+    except Exception as exc:
+        if not is_nav_timeout(exc):
+            raise
+        # Not fatal: the milestone did not fire, but the document usually has.
+        nav_state = "salvaged"
+        log.info("%s: %r did not fire within %dms; salvaging the DOM as rendered",
+                 url, wait_until, nav_timeout_ms)
+        # A timeout can land mid-navigation, where `content()` raises "the page is navigating and
+        # changing the content" and the salvage is worth nothing. Reaching `domcontentloaded` first
+        # gives the document a harvestable state to be read from. Found by forcing a short
+        # navigation timeout against a live site; a stub cannot reproduce it.
+        settle_budget = min(nav_timeout_ms, budget_left_ms())
+        if settle_budget > 0:
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=settle_budget)
+            except Exception:
+                pass
+
+    # Quiescence is a bonus, never a gate. A page that never goes quiet is the normal case on the
+    # modern web, not a failure, so this budget is small and its expiry is recorded, not raised.
+    quiet_budget = min(quiet_ms, budget_left_ms())
+    if quiet_budget > 0:
+        try:
+            page.wait_for_load_state("networkidle", timeout=quiet_budget)
+        except Exception:
+            if nav_state == "ok":
+                nav_state = "busy"
+
+    page.wait_for_timeout(max(0, min(settle_ms, budget_left_ms())))
+    html = harvest_dom(page, budget_left_ms)
+    if is_blank_document(html):
+        raise RuntimeError(f"navigation produced no document (nav_state={nav_state})")
+    return html, nav_state
+
+
 def render_with_browser(url: str, config: dict, *, deadline: float | None = None) -> RenderResult:
     """Tier A render. Any failure degrades to a recorded error, never an exception."""
     render_cfg = config.get("render", {})
     width = int(render_cfg.get("viewport_width", 1280))
     height = int(render_cfg.get("viewport_height", 800))
-    wait_until = render_cfg.get("wait_until", "networkidle")
+    wait_until = resolve_wait_until(render_cfg)
     settle_ms = int(render_cfg.get("settle_ms", 1200))
+    quiet_ms = int(render_cfg.get("network_quiet_ms", 3000))
+    nav_timeout_ms = int(render_cfg.get("nav_timeout_ms", 15000))
     max_render_ms = int(render_cfg.get("max_render_ms", 20000))
     capture_console = bool(render_cfg.get("capture_console_errors", True))
     max_console = int(render_cfg.get("max_console_errors", 25))
@@ -226,8 +365,19 @@ def render_with_browser(url: str, config: dict, *, deadline: float | None = None
             return RenderResult(available=False, mode=TIER_B, error="deadline exceeded before render")
         max_render_ms = min(max_render_ms, remaining_ms)
 
-    result = RenderResult(mode=TIER_A, viewport={"width": width, "height": height})
+    # Navigation may not outlive the whole render budget, and Playwright reads `timeout=0` as
+    # "wait forever" — the one value that must never reach it.
+    nav_timeout_ms = min(nav_timeout_ms, max_render_ms)
+    if nav_timeout_ms <= 0:
+        return RenderResult(available=False, mode=TIER_B, wait_strategy=wait_until,
+                            error="no render budget left for navigation")
+
+    result = RenderResult(mode=TIER_A, viewport={"width": width, "height": height},
+                          wait_strategy=wait_until)
     started = time.monotonic()
+
+    def budget_left_ms() -> int:
+        return int(max(0, max_render_ms - (time.monotonic() - started) * 1000))
 
     try:
         from playwright.sync_api import sync_playwright
@@ -250,9 +400,11 @@ def render_with_browser(url: str, config: dict, *, deadline: float | None = None
                     page.on("pageerror", lambda e: errors.append(str(e)[:500])
                             if len(errors) < max_console else None)
 
-                page.goto(url, wait_until=wait_until, timeout=max_render_ms)
-                page.wait_for_timeout(min(settle_ms, max_render_ms))
-                result.html = page.content()
+                html, nav_state = drive_page(
+                    page, url, wait_until=wait_until, nav_timeout_ms=nav_timeout_ms,
+                    quiet_ms=quiet_ms, settle_ms=settle_ms, budget_left_ms=budget_left_ms)
+                result.html = html
+                result.nav_state = nav_state
                 result.console_errors = errors
 
                 # Geometry is best-effort: a page that blocks evaluation must not fail the render.

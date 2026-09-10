@@ -28,8 +28,9 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 ## Repository state (verified)
 
 - **Path / git root:** `C:\Users\PRIYANSHU PAL\Desktop\ADOBE\citely-audit`
-- **Branch:** `main` · **Commits:** 3, latest `f2aa690 Add tests for SPA detection and security measures`
-  (41 files tracked, as of 2026-09-06). Phase 4 work is uncommitted.
+- **Branch:** `main` · **Commits:** 7, latest `c4eecbe Enhance entity declaration checks and add
+  comprehensive tests` (51 files tracked, as of 2026-09-10). The 2026-09-10 resilience work is
+  uncommitted.
 - `.gitignore` present; `PLAN.md` is tracked.
 - Project renamed `brand-ai-readiness-audit` → **`citely-audit`**. Identity fields rebranded;
   **skill folder names deliberately unchanged** (descriptive + agentskills.io-valid).
@@ -94,9 +95,78 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
   produced titles that contradicted their own evidence in BOTH directions — "Mobile viewport is
   declared" for a missing viewport, and "No organization or person entity declared" for a page whose
   evidence read "Identity declared only via Open Graph".
+- **stdout carries the report and nothing else, ENFORCED not intended** (added 2026-09-10).
+  Every skill writes JSON to stdout, so one stray byte in front of it breaks a CI consumer. Two
+  mechanisms, because one is not enough. (1) `configure_logging()` passes **`force=True`** —
+  `logging.basicConfig` is a *silent no-op* when the root logger already has a handler, so a
+  dependency that configures logging at import time keeps its handler AND its stream. Probed and
+  confirmed: with a library calling `basicConfig(stream=sys.stdout)` first, our records land on
+  stdout and our format is discarded. `force=True` is the load-bearing argument; without it the
+  function is decoration. (2) `stdout_reserved_for_report()` holds `sys.stdout` shut for the whole
+  audit, because a `print()` in a lazily-imported dependency is not logging and carries no stream
+  to correct. Diverted bytes are counted and warned about, never silently swallowed.
+- **Analyzer subprocess stderr is forwarded, tagged and capped.** `capture_output=True` pipes the
+  child's stderr, which was being discarded outright — the only diagnostic a failing analyzer
+  produces. Capped, because the child is the component holding page-derived text.
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
+- **Entity signals are graded by CARRIER STRENGTH and detected STRUCTURALLY** (added 2026-09-10).
+  Three rules, each replacing a fixed list that only fitted the sites we had tested.
+  (1) *Identity is a shape, not a type name.* schema.org has ~200 LocalBusiness subtypes, so a
+  five-name allowlist is wrong for most of the web: a real dental practice publishing a correct
+  `Dentist` node with sameAs scored 37.5 -> 39.3, worse than a site with no markup at all. A node
+  with a `name` plus two real-world facts (address / telephone / sameAs / logo / geo / ...) is an
+  identity claim whatever it calls itself, so subtypes invented after this file was written are
+  caught without being listed. (2) *sameAs is a signal, not a property.* It is read from any
+  JSON-LD node, microdata `itemprop`, `rel="me"`, and ordinary profile links recognised two ways
+  — path handle resembling the brand, or a short-path link to a known platform sitting in site
+  chrome. Neither route covers the web alone: EFF satisfies only the first, python.org only the
+  second. (3) *Authority includes directories and registries in full.* A local business will never
+  have a Wikidata entry; its Google Business, Yelp or companies-registry record is the third-party
+  anchor it can actually obtain. Self-published profiles are `partial`, never `fail`.
+- **`unknown` means unmeasurable, never "absent".** `sameas_present` and `name_consistency`
+  returned `unknown` whenever no JSON-LD entity existed, which is a claim we could not tell — and
+  it was false, because the evidence was on the page. With the intra-category dependency edges,
+  that wiped 44 of 100 points to `unknown` as collateral and pinned Entity Trust to a **fixed
+  point**: `(22*0.5 + 24*0.5 + 10)/56 = 58.9` at coverage `0.56`, returned identically by eff.org,
+  github.com and a small dental practice. A constant carries no information about the site.
+- **Entity checks no longer suppress each other.** Their `depends_on` edges encoded a detection
+  limit, not a causal one. All six now depend only on `render.content_without_js`, which is the
+  real common cause: if the page is a JS shell, nothing is measurable.
+- **Open Graph is scored once, not three times.** It was rescuing `structured_data_present` to
+  `partial` while also carrying `organization_declared` to `partial` and passing
+  `opengraph_identity` — 46 points of critical weight resting on one signal. Open Graph is a
+  social-preview format with no schema.org type, so it no longer stands in for structured data.
+- **Precision rules that keep the above honest.** Share widgets are excluded (every CMS emits
+  them; counting them would pass essentially every site). A profile path is at most two segments
+  with the handle at the end, because matching the brand token anywhere in the path claimed
+  `wiki.qt.io/Qt_for_Python` and a dated blog post as python.org's own profiles. Names are
+  compared by SEGMENT, so a tagline is not a contradiction. Nodes credited via `author` are
+  excluded, but `publisher` is NOT: every major CMS points an Article's publisher at the site's
+  own Organization, and excluding it deleted exactly the node the category looks for.
+- **Never wait on `networkidle`, and never discard a timed-out DOM** (added 2026-09-10).
+  `networkidle` needs 500 ms with ≤2 connections in flight; analytics beacons, chat widgets and
+  long-polling hold a modern page above that line permanently, so it does not fire. Measured on
+  python.org: `load` 1.2 s, `domcontentloaded` 3.9 s, `networkidle` 20.0 s then timeout. We wait on
+  `load`, pursue quiescence as a bounded bonus (`network_quiet_ms`), and **salvage** the DOM on a
+  navigation timeout — a milestone failing to fire does not mean there is no page. Disclosed as
+  `diagnostics.render_nav_state` (`ok` / `busy` / `salvaged`).
+- **The Tier-B fold window is budgeted in VISIBLE TEXT, never in markup** (added 2026-09-10).
+  Markup length is not layout: on python.org the first 16,151 characters of `<body>` are 11,414
+  characters of tags and 1,345 of text, so a 2,500-character markup slice never left the masthead.
+  Non-rendering subtrees (`<script>`, `<style>`, inline `<svg>`, `<template>`, hidden nodes) are
+  pruned before counting, and chrome (`<nav>`, `<header>`, dialogs) is charged at
+  `chrome_text_weight` up to `chrome_text_cap` **per chrome root**, because a collapsed mega-menu
+  occupies one bar on screen however many links it holds. Past that allowance chrome costs full
+  price, so the discount cannot be farmed. `<nav>` and floating dialogs are additionally barred
+  from supplying the headline: a menu label is not a hero and a consent banner is not a value
+  proposition. `<header>` is **not** barred — heroes legitimately live there, on python.org and in
+  our own healthy fixture, and excluding it would have created a fresh false negative.
+- **The two render tiers must agree on the same page.** An image-only heading
+  (`<h1><img alt="Acme"></h1>`) has no `innerText` in Tier A and no `get_text()` in Tier B, so both
+  now fall back to the accessible name. A tier-specific reading of the same DOM is a bug, not a
+  tier difference.
 
 ## Verified spec facts (agentskills.io)
 
@@ -110,16 +180,18 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 
 ## Current status: PHASE 6 COMPLETE — **the audit runs end-to-end and emits a real report**
 
-**705 tests, 13 skipped.** **Citely is now a working tool.** `run_audit.py` fetches, selects pages,
+**821 tests, 13 skipped.** **Citely is now a working tool.** `run_audit.py` fetches, selects pages,
 renders, runs all four analyzers as subprocesses, scores, and emits a schema-valid JSON report.
 
 Verified on real input:
 | Target | Score | Coverage | Findings |
 |---|---|---|---|
 | `https://example.com` (live) | 62/100 | 0.805 | 8 — all genuine (no structured data, 14-char title, no meta description) |
+| `https://www.python.org` (live) | **90/100** | 0.865 | 4 — was 77 / 0.795 / 5 before the 2026-09-10 render fixes |
 | healthy fixture | 99/100 | 0.85 | 1 |
 | **German fixture** | **98/100** | 0.698 | 1 — generalization proven: the gap shows as *coverage*, not failures |
 | SPA shell | 30/100 | 0.175 | 2 |
+| deep-chrome fixture | 75/100 | 0.68 | 2 — the python.org shape, `<h1>` 41,752 chars into `<body>` |
 
 Run it:
 ```bash
@@ -281,6 +353,37 @@ leaked into report evidence (only the exception TYPE).
 - [x] `sample-report.json` **regenerated from real orchestrator output** (was a hand-written
       placeholder since Phase 1), with timestamps pinned so the committed file is stable.
 - [x] `tests/test_orchestrator.py` — 32 tests.
+
+### Acquisition & fallback resilience (2026-09-10, post-Phase-6)
+
+Auditing `python.org` exposed **one defect in each rendering tier**, which compounded: Tier A threw
+away a working render, and the Tier-B fallback it dropped into then misread the page. Human
+Orientation scored **41.7** on a site with a heading, a CTA and a value proposition above the fold.
+
+| # | Defect | Impact |
+|---|---|---|
+| 1 | `page.goto(..., wait_until="networkidle")` | The milestone needs 500 ms of near-silence and never fires on a page with beacons or long-polling. The full 20 s render budget was burned, then the **complete 68 KB DOM Chromium was holding was discarded** and the audit degraded to Tier B. |
+| 2 | Tier-B fold window sliced **markup**, not layout | Mega-nav markup, an inline `<svg>` sprite and a critical-CSS block consumed the 2,500-character budget before it reached the content. Two false `fail`s: "No heading near the top of the document" on a page whose hero is a heading, and a value proposition marked missing because the headline was never seen. |
+
+Both fixed, with `tests/test_render_resilience.py` (48) and `tests/fixtures/deep_chrome_page.html`.
+Measured on python.org: overall **77 → 90**, Human Orientation **41.7 → 91.0**, category coverage
+**0.72 → 1.0**, `render_mode` heuristic → playwright, `partial: true (render_failed)` → `false`,
+wall clock 58.6 s → 40.8 s. Every pre-existing fixture score is byte-identical.
+
+**Ten mutations were applied to confirm the tests fail without each fix**, and that paid off as it
+did in Phase 2: `test_wrapping_the_page_in_nav_does_not_buy_free_space` **passed with the per-root
+chrome cap removed**, because its `<nav>` was so large the discount alone exhausted the budget. It
+was measuring the discount, not the cap. Resized to the band where only the cap can decide, and it
+now fails correctly under mutation.
+
+Related edge cases handled at the same time, each with a test: inline `<svg>` sprites and
+critical-CSS blocks consuming the budget · consent dialogs displacing content in DOM order · nodes
+that are `hidden` / `aria-hidden` / `display:none` both *costing* and *earning* nothing ·
+image-only headings read via `alt` in **both** tiers · a bounded DOM walk · markup that a character
+slice would have cut mid-tag · `timeout=0` reaching Playwright, which reads it as "wait forever".
+
+Also extended `test_embedded_thresholds_match_registry` to the two Phase-5 analyzers, which it had
+never covered despite this file claiming drift is caught by tests.
 
 ### Not yet done — implementation order (PLAN.md §14)
 - [x] ~~**2.** `_safe_fetch.py` + security corpus.~~ **DONE**
@@ -467,3 +570,113 @@ Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`.
   self-maintaining test that derives which checks emit `partial` from analyzer source and fails if
   any of them would fall back to an absolute "No X" title.
   Test count 687 -> 705.
+- 2026-09-10 — **Acquisition & fallback resilience** (triggered by a user audit of python.org
+  scoring 77 with Human Orientation at 41.7). Two defects, one per rendering tier, that compounded.
+  **Tier A — the `networkidle` trap.** The renderer waited on a state requiring 500 ms with at most
+  two connections in flight. Analytics beacons, chat widgets and long-polling keep a modern page
+  permanently above that line, so it simply never fires. Timed it rather than assuming: on
+  python.org `load` returned in 1.2 s with 63 KB, `domcontentloaded` in 3.9 s with 53 KB, and
+  `networkidle` timed out at 20.0 s — **holding 68 KB of fully rendered DOM that the exception then
+  threw away.** The default is now `load`; quiescence is pursued separately under
+  `network_quiet_ms` and its expiry is *recorded*, not raised; and a navigation timeout **salvages**
+  the DOM. The salvage is the part that generalizes: it protects against every cause of a navigation
+  timeout, not only this one. `diagnostics.render_nav_state` discloses `ok` / `busy` / `salvaged`,
+  because a salvaged Tier-A render is not the same thing as a clean one.
+  **Tier B — the fold window measured markup instead of layout.** The DOM-order proxy treated the
+  first 2,500 characters of `<body>` as the first viewport. Measured python.org rather than guessing:
+  the first heading with text sits **16,151 characters** into `<body>`, and that region is 11,414
+  characters of tags against 1,345 of text — the budget was 71% spent on angle brackets. Rewritten to
+  parse first (a character slice also cuts through tags and hands the parser wreckage), prune
+  non-rendering subtrees, and spend the budget in visible text, with chrome charged at a discount
+  capped per chrome root.
+  **Three design errors caught by measuring instead of reasoning:**
+    1. A pure visible-text budget was *still* not enough — python.org's masthead alone holds 3,204
+       characters of text. The chrome discount is load-bearing, not a refinement.
+    2. Skipping chrome outright would have broken our own healthy fixture, whose `<h1>` is inside
+       `<header>`. Heroes live in banners. Only `<nav>` and floating dialogs are barred from
+       supplying the headline, which is also what stops the discount being farmed.
+    3. My anti-gaming test **passed with the cap removed** — its `<nav>` was large enough that the
+       discount alone exhausted the budget, so it was measuring the wrong thing. Same failure mode as
+       the Phase-3 content-type fix that was inert against a green suite. Found by mutation, not by
+       review; resized to the band where only the cap can decide.
+  python.org: 77 → **90** overall, Human Orientation 41.7 → **91.0**, coverage 0.795 → 0.865,
+  `partial` true → false, 58.6 s → 40.8 s. All five pre-existing fixtures unchanged.
+  Test count 705 → 753; added `tests/fixtures/deep_chrome_page.html` (the python.org shape, `<h1>` at
+  body offset 41,752) which also serves Phase 9's archetype corpus.
+  **A fourth error, and the one a stub could never have found.** Forcing a 700 ms navigation timeout
+  against the live site to prove the salvage path showed it degrading to Tier B anyway: a timeout can
+  land *mid-navigation*, where `page.content()` itself raises "the page is navigating and changing the
+  content". The salvage was reading a document that was not yet readable. Now it reaches
+  `domcontentloaded` first and retries the read within the remaining budget. With that, a 700 ms
+  navigation budget produces the **same report as a 15 s one** — 90 / 91.0 / 0.865, `nav_state:
+  salvaged`, still Tier A. Unit tests alone would have reported this fix as working.
+- 2026-09-10 — **stdout contract enforced** (reported as "INFO render: logs are leaking into stdout").
+  **Checked the claim before acting on it, and it did not hold.** Every `basicConfig` in the project
+  already named `stream=sys.stderr`, there is no `print()` to stdout anywhere in `skills/`, and
+  separating the two streams on a live run showed stdout was byte-for-byte valid JSON with the
+  `INFO render:` lines on stderr where they belong. What was observed is PowerShell rendering both
+  streams into one console, which is not contamination.
+  **The underlying concern was still well-founded, and probing it found a real latent defect.**
+  `logging.basicConfig` is a **silent no-op when the root logger already has a handler**. Verified
+  rather than reasoned about: a library calling `basicConfig(stream=sys.stdout)` at import time
+  keeps its handler, our call changes nothing, the record lands on **stdout**, and even our format
+  is ignored. That is one dependency away from exactly the CI breakage described. Fixed with
+  `force=True` in all five skills.
+  A second hole `force=True` cannot close: a bare `print()` in a dependency imported LATER in the
+  run — Playwright is imported inside the render stage — is not logging and has no stream to
+  correct. So the orchestrator now holds `sys.stdout` shut for the whole audit and writes the report
+  to the real stream afterwards. Diverted bytes are counted and warned about rather than swallowed,
+  since a silent diversion hides a bug as well as a leak causes one.
+  **Third finding, unrelated to stdout:** analyzer subprocesses run under `capture_output=True`,
+  so their stderr was piped and then **discarded entirely** — the only diagnostic a failing analyzer
+  produces was going nowhere. Now forwarded, tagged `[skill]`, capped at 20,000 chars because the
+  child is the component holding page-derived text.
+  `tests/test_stdout_contract.py` (31) asserts the property through real subprocess pipes, pins the
+  `basicConfig` premise so a future Python change would announce itself, and guards `print()` via an
+  **AST walk** — the first text-scan version flagged this project's own docstrings, which is how a
+  guard gets deleted for crying wolf. Four mutations confirm the tests fail without each fix.
+  Test count 753 → 784.
+- 2026-09-10 — **Entity Trust generalized to the open web** (triggered by eff.org returning 58.9 at
+  0.56 coverage, the same two numbers github.com and a small dental practice returned).
+  **The figure was a fixed point, not a measurement.** `(22*0.5 + 24*0.5 + 10*1.0) / 56 = 58.9`,
+  `56/100 = 0.56`. Every Open-Graph-only site landed exactly there whatever it published, so the
+  score said nothing about the site. A second fixed point, 78.6 / 0.56, was hiding behind it.
+  **Built a ten-site corpus before touching anything** — three bakeries, four dental practices and
+  the three large sites already tested — rather than fixing one site at a time. That immediately
+  overturned the premise I had started from. Small businesses often have BETTER structured data
+  than tech giants: github.com and eff.org publish no JSON-LD at all, while a Portland bakery and
+  two UK dental practices publish `LocalBusiness`, `Organization` and `Dentist` graphs with sameAs.
+  **Five defects, none of which the original three-item proposal would have caught:**
+    1. **A five-name type allowlist.** schema.org has ~200 LocalBusiness subtypes. A dental
+       practice with a textbook `Dentist` node — name, address, telephone, logo, sameAs — scored
+       **39.3, the worst in the corpus**, below sites with no markup whatsoever. Replaced with a
+       structural rule: a name plus two real-world facts is an identity claim whatever its type.
+    2. **sameAs read only from accepted-type nodes**, so those same practices' declared links were
+       invisible because of what the node called itself.
+    3. **Names compared whole**, so a bakery's own "Bakeshop" and
+       "Bakeshop | NE Portland Retail and Wholesale Bakery" were reported as conflicting brands.
+    4. **Every entity was a naming candidate**, so the web agency that built a bakery's site was
+       read as a rival brand. A high-severity check failing correct markup, twice over.
+    5. **Open Graph paid out three times** across 46 points of critical weight, which is the
+       arithmetic that produced the fixed point.
+  **Three design errors of my own, each caught by measuring rather than reasoning:**
+    a. Excluding `publisher` as a third-party role deleted the site's OWN Organization, because
+       every major CMS points an Article's publisher at it. A bakery lost its identity node
+       entirely and dropped to 50.
+    b. Matching the brand token anywhere in the path claimed `wiki.qt.io/Qt_for_Python` and a
+       dated blog post as python.org's own profiles. Fixed by requiring a short path with the
+       handle at the end; chrome membership then recovers the profiles whose handle differs from
+       the domain (`@ThePSF`, `/gcbakery`), which a token rule alone cannot see.
+    c. **Two of my eight mutations initially survived** — the share-widget and third-party-author
+       tests passed with those rules removed, because on their fixtures another rule happened to
+       cover the case. Same failure mode as the chrome-cap test last time. Rewrote both against
+       discriminating shapes: a share widget in the FOOTER, and a third party that is an
+       Organization rather than a Person.
+  Results: coverage 0.56 -> **1.0** on all ten real sites, entity scores spread **39 to 94** and
+  ordered by markup quality, with two small trade businesses at the top of the table above GitHub.
+  eff.org 58.9 -> 66.0 (overall 78 -> 80); github.com 58.9 -> 56.0; python.org 58.9 -> 88.0.
+  Six archetype fixtures added (`tests/fixtures/entity_*.html`): a trade business on an unlisted
+  subtype, an agency-built site, a social-only site with mismatched handles, a share-widget-only
+  page, a directory-listed clinic, and a Spanish bakery. They encode SHAPES, so a change that
+  helps one site cannot silently break another — which was the explicit requirement.
+  Test count 784 -> 821; `tests/test_entity_generalization.py` (37), all eight mutations caught.

@@ -120,8 +120,13 @@ def test_broken_fixture_fails_entity_checks(raw_registry):
     assert st["entity.structured_data_present"] == "fail"
     assert st["entity.organization_declared"] == "fail"
     # Nothing to evaluate is `unknown`, never `fail` — we do not punish what we could not measure.
-    assert st["entity.sameas_present"] == "unknown"
-    assert st["entity.name_consistency"] == "unknown"
+    # These were `unknown` while sameAs was only ever looked for inside a JSON-LD entity, and a
+    # name only compared between JSON-LD entities. Both are now measurable from the page itself,
+    # so the honest answer is a verified "we looked and there is none" rather than "we could not
+    # tell". That distinction is what collapsed Entity Trust onto a fixed 58.9 at 0.56 coverage
+    # for every site without JSON-LD, regardless of what it actually published.
+    assert st["entity.sameas_present"] == "fail"
+    assert st["entity.name_consistency"] in ("fail", "partial")
 
 
 # --- False-positive guards (rubric penalises these as hard as misses) ---------------------------

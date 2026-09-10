@@ -63,9 +63,16 @@ lowest-priority checks under pressure and marks the report `partial: true` with 
 
 ## Rendering strategy (tiered)
 
-- **Tier A** — Playwright render diff when Chromium is available.
+- **Tier A** — Playwright render diff when Chromium is available. Navigation waits for `load`, never
+  for `networkidle`: that state needs 500ms with almost nothing in flight, which analytics beacons,
+  chat widgets and long-polling never allow, so it does not fire on most real sites. Quiescence is
+  pursued afterwards under its own small budget, and a navigation timeout **salvages** the rendered
+  DOM rather than discarding it. `diagnostics.render_nav_state` reports `ok`, `busy` or `salvaged`.
 - **Tier B** — browserless SPA heuristic (framework markers, empty-shell mount node, script-to-text
   ratio) when it is not; findings labeled `heuristic` and `diagnostics.render_mode = "heuristic"`.
+  Above-the-fold checks fall back to a DOM-order proxy budgeted in **visible text**, with
+  non-rendering subtrees pruned and navigation chrome charged at a capped discount, so a mega-menu
+  or an inline SVG sprite cannot push the real content out of the measured window.
 
 ## Validation
 

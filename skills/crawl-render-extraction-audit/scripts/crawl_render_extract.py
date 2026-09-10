@@ -31,6 +31,21 @@ from urllib.parse import urlparse
 
 log = logging.getLogger("crawl-render-extraction-audit")
 
+
+LOG_FORMAT = "%(levelname)s %(name)s: %(message)s"
+
+
+def configure_logging(level: int = logging.INFO) -> None:
+    """Send every log record to stderr, and mean it.
+
+    `logging.basicConfig` is a SILENT NO-OP when the root logger already has a handler, so a
+    dependency that configured logging at import time keeps its handler AND its stream. Verified:
+    with a library calling `basicConfig(stream=sys.stdout)` first, our records land on stdout and
+    our format is ignored. This analyzer prints its check states to stdout, so that would corrupt
+    the contract the orchestrator parses. `force=True` is the load-bearing argument.
+    """
+    logging.basicConfig(stream=sys.stderr, level=level, force=True, format=LOG_FORMAT)
+
 # Static, anchored patterns only — never built from page content, so they cannot become a ReDoS
 # vector on hostile input.
 _SCRIPT_RE = re.compile(r"<script\b[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
@@ -468,7 +483,7 @@ def main(argv=None) -> int:
     parser.add_argument("--config", help="path to config/checks.json")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+    configure_logging()
     registry = load_registry(args.config)
 
     try:
