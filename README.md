@@ -1,13 +1,14 @@
-# Brand AI-Readiness Audit
+# Citely — Brand AI-Readiness Audit
 
 An Agent Skill Marketplace (`agentskills.io`-compliant) that audits an arbitrary website and
 diagnoses two things: **off-site AI discoverability** (why AI assistants fail to crawl, extract,
 corroborate, or cite the brand's facts) and **on-site engagement** (why AI-referred visitors bounce).
 It runs read-only and emits a single evidence-backed JSON report.
 
-> **Status: architecture scaffold.** The directory structure, manifests, contracts (schemas), config,
-> and SKILL.md files are in place. The Python check/fetch/orchestration logic is present as
-> clearly-marked `TODO` skeletons and is not yet implemented.
+> **Status: working.** The audit runs end-to-end and emits a schema-valid JSON report: safe fetch,
+> page selection, tiered rendering, 24 checks across four analyzer skills, and capability scoring.
+> Still to come: copy-paste remediation snippets and proactive suggestions (Phase 7), and the
+> non-expert HTML report (Phase 8).
 
 ## Layout
 
@@ -36,7 +37,7 @@ pip install -e .
 python -m playwright install chromium
 ```
 
-## Run (once implemented)
+## Run
 
 ```bash
 # Online: audit a live homepage
@@ -62,9 +63,16 @@ lowest-priority checks under pressure and marks the report `partial: true` with 
 
 ## Rendering strategy (tiered)
 
-- **Tier A** — Playwright render diff when Chromium is available.
+- **Tier A** — Playwright render diff when Chromium is available. Navigation waits for `load`, never
+  for `networkidle`: that state needs 500ms with almost nothing in flight, which analytics beacons,
+  chat widgets and long-polling never allow, so it does not fire on most real sites. Quiescence is
+  pursued afterwards under its own small budget, and a navigation timeout **salvages** the rendered
+  DOM rather than discarding it. `diagnostics.render_nav_state` reports `ok`, `busy` or `salvaged`.
 - **Tier B** — browserless SPA heuristic (framework markers, empty-shell mount node, script-to-text
   ratio) when it is not; findings labeled `heuristic` and `diagnostics.render_mode = "heuristic"`.
+  Above-the-fold checks fall back to a DOM-order proxy budgeted in **visible text**, with
+  non-rendering subtrees pruned and navigation chrome charged at a capped discount, so a mega-menu
+  or an inline SVG sprite cannot push the real content out of the measured window.
 
 ## Validation
 

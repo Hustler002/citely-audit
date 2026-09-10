@@ -1,5 +1,12 @@
 # CONTEXT.md — Agent Skill Marketplace: AI Discoverability & Engagement Audit
 
+> ⚠️ **HISTORICAL DOCUMENT — preserved verbatim. Do not implement from this file.**
+> This is the original **problem statement** and the **first draft design**, kept unedited as the record of
+> what was originally asked. Its architecture, decisions, and the `brand-ai-readiness-audit/` tree in §2.1
+> have all been **superseded by [`PLAN.md`](PLAN.md)** (MASTER PLAN v3), which is the authoritative
+> implementation plan. Current progress lives in [`CLAUDE.md`](CLAUDE.md). The project is now named
+> **Citely** (`citely-audit`).
+
 > Handoff doc. Read this top to bottom before doing any implementation work.
 > Status tags used throughout: **[CONFIRMED]** = user explicitly decided this · **[RECOMMENDED]** = assistant's proposal, not yet confirmed · **[OPEN]** = genuinely undecided.
 

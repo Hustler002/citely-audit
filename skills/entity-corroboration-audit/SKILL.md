@@ -15,10 +15,14 @@ Extracts and evaluates the page's structured-data entity graph.
 ## Inputs
 - `--artifact <crawl_artifact.json>` or `--html-file <page.html>`.
 - `--config <scoring-config.json>`.
-- `--allow-external` (optional) — enable the Wikidata corroboration lookup. **Off by default.**
+- The optional Wikidata corroboration lookup runs in the **orchestrator's fetch stage**, not here.
+  It arrives pre-fetched as `external_corroboration` in the artifact. This analyzer has **zero**
+  network access, with no exceptions.
 
 ## Output
-- JSON array of partial findings on stdout (no `id`). Logs to stderr.
+- JSON array of **check states** on stdout (see `references/check-result-schema.json`): one
+  `{check_id, state, measurement, evidence, selector, page_url}` per check. **Not findings** —
+  report wording lives once in `config/checks.json` and is applied by the orchestrator. Logs to stderr.
 
 ## Checks
 - Extract JSON-LD, Open Graph, and microdata; require an `Organization`/`Person`-class entity.

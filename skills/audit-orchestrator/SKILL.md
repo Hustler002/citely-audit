@@ -5,7 +5,7 @@ license: Apache-2.0
 compatibility: Requires Python 3.11+ and network access to the target site. Optional Playwright/Chromium for Tier-A render diff (audit degrades to a browserless heuristic without it). Provision Chromium once as a setup step, not during a run.
 metadata:
   role: entrypoint
-  project: brand-ai-readiness-audit
+  project: citely-audit
 ---
 
 # Audit Orchestrator (entrypoint)

@@ -17,7 +17,10 @@ Analyzes the shared crawl artifact for the three stages of the ingestion funnel.
 - `--config <scoring-config.json>` (thresholds; safe defaults embedded).
 
 ## Output
-- JSON array of partial findings on stdout (no `id`; the orchestrator assigns it). Logs to stderr.
+- JSON array of **check states** on stdout (see `references/check-result-schema.json`): one
+  `{check_id, state, measurement, evidence, selector, page_url}` per check. **Not findings** —
+  report wording lives once in `config/checks.json` and is applied by the orchestrator, so it
+  cannot drift between analyzers. Logs go to stderr.
 
 ## Checks
 1. **Access** — HTTP status, robots directive, bot-hostile response headers.

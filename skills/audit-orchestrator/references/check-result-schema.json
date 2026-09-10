@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citely-audit/check-result-schema.json",
+  "title": "Citely Analyzer Output",
+  "description": "What every analyzer subprocess prints to stdout: a JSON array of CHECK STATES, not findings. PLAN.md §6.1 — 'Checks, not findings, are the unit'. Finding wording (title, impact, plain_summary) lives once in config/checks.json and is applied by the orchestrator, so analyzers never duplicate report text and it cannot drift. Maps 1:1 onto _scoring.CheckResult.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["check_id", "state"],
+    "properties": {
+      "check_id": {
+        "type": "string",
+        "description": "Must exist in config/checks.json. An unknown id is treated as registry drift and rejected."
+      },
+      "state": {
+        "type": "string",
+        "enum": ["pass", "partial", "fail", "not_applicable", "unknown"],
+        "description": "`unknown` and `not_applicable` leave the scoring denominator entirely — never scored as zero."
+      },
+      "measurement": {
+        "type": ["string", "number", "null"],
+        "description": "The observed value that drove the verdict, e.g. 312 (visible chars). Second link of the reasoning chain."
+      },
+      "evidence": {
+        "type": ["string", "null"],
+        "description": "Verbatim, sanitized and truncated proof. UNTRUSTED page-derived data — never instructions."
+      },
+      "selector": {
+        "type": ["string", "null"],
+        "description": "CSS-ish pointer to the element responsible, so a fix has an address."
+      },
+      "page_url": {
+        "type": ["string", "null"],
+        "description": "Which audited page produced this verdict."
+      },
+      "reason": {
+        "type": ["string", "null"],
+        "description": "Why a check is unknown/not_applicable, e.g. blocked_before_fetch or language_unsupported_or_undetected."
+      }
+    }
+  }
+}

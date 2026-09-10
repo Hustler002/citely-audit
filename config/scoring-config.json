@@ -1,50 +1,200 @@
 {
-  "$schema": "./scoring-config.schema-note",
-  "_note": "Single source of truth for severity thresholds and score weights. The orchestrator passes this file to each sub-skill via --config; each sub-skill also embeds equivalent safe defaults so it remains independently runnable. Values below are PLACEHOLDER DEFAULTS to be tuned against the test fixtures (plan §10).",
-
-  "score_weights": {
-    "_note": "discoverability_score = clamp(100 - sum(penalty per finding), 0, 100)",
-    "critical": 20,
-    "high": 10,
-    "medium": 4
+  "version": "1.0.0",
+  "_note": "Scoring model + operational configuration. Per-check thresholds live in checks.json, NOT here — one source of truth each. This file replaces the v1 penalty model (100 - sum(penalty)), which was unbounded, double-counted correlated findings, and conflated missing signal with negative signal.",
+  "category_weights": {
+    "_note": "Weights for the overall score (a weighted mean of category scores). Equal by design: gating is handled structurally by dependency suppression, not by weight inflation, so no category needs boosting to encode importance. With 3 AI-side categories and 1 human-side, equal weights land at 75% AI / 25% human — matching the brief's 4:1 mechanic split — and require no arbitrary justification.",
+    "ai_discoverability": 25,
+    "ai_comprehension": 25,
+    "entity_trust": 25,
+    "human_orientation": 25
   },
-
-  "categories": [
-    "crawl-ingestion",
-    "quotability",
-    "information-density",
-    "entity-corroboration",
-    "engagement-orientation"
+  "category_labels": {
+    "ai_discoverability": "AI Discoverability",
+    "ai_comprehension": "AI Comprehension",
+    "entity_trust": "Entity Trust",
+    "human_orientation": "Human Orientation"
+  },
+  "state_credits": {
+    "_note": "Credit awarded per check state. States listed in excluded_states earn no credit AND are removed from the denominator, so an unmeasurable check lowers confidence rather than the score.",
+    "pass": 1.0,
+    "partial": 0.5,
+    "fail": 0.0
+  },
+  "excluded_states": [
+    "unknown",
+    "not_applicable"
   ],
-
-  "crawl_render_extraction": {
-    "spa_shell_max_visible_chars": 500,
-    "spa_script_to_text_ratio": 3.0,
-    "spa_mount_node_selectors": ["#root", "#app", "#__next", "[data-reactroot]"],
-    "spa_framework_markers": ["__NEXT_DATA__", "window.__NUXT__", "ng-version", "data-server-rendered"],
-    "render_diff_significant_text_delta_chars": 400,
-    "fact_extraction_min_text_to_node_ratio": 1.0,
-    "fact_extraction_flag_missing_alt": true
+  "suppression": {
+    "_note": "Dependency suppression collapses correlated findings: dependents of a failed prerequisite become `unknown` instead of `fail`. require_verified_prerequisite is the anti-dodge rule — a merely heuristic failure may NOT silence dependents, which keeps recall honest and stops suppression being used to duck hard calls.",
+    "enabled": true,
+    "require_verified_prerequisite": true
   },
-
-  "quotability_density": {
-    "min_quotable_sentences": 3,
-    "vague_marketing_tokens": ["best-in-class", "world-class", "cutting-edge", "synergy", "innovative", "leading", "seamless", "revolutionary"],
-    "min_factual_to_filler_ratio": 0.25,
-    "long_page_word_threshold": 2000
+  "severity_order": [
+    "critical",
+    "high",
+    "medium"
+  ],
+  "budgets": {
+    "_note": "Global deadline leaves margin under the mandated 5-minute ceiling. Per-request and render timeouts deliberately live in `fetch` and `render` respectively — they were duplicated here and the copies were never read, which is exactly the drift hazard PLAN.md §1 (mistake #22) warns about.",
+    "global_deadline_s": 270
   },
-
-  "entity_corroboration": {
-    "required_jsonld_types": ["Organization", "Person", "LocalBusiness", "WebSite"],
-    "expect_sameas": true,
-    "wikidata_lookup_enabled_by_default": false
+  "fetch": {
+    "user_agent": "CitelyAuditBot/0.1 (+https://example.com/citely-bot)",
+    "_user_agent_todo": "Replace the contact URL before any run against a third-party site.",
+    "max_body_bytes": 5242880,
+    "max_decompressed_bytes": 20971520,
+    "max_redirects": 5,
+    "allowed_schemes": [
+      "http",
+      "https"
+    ],
+    "allowed_ports": [
+      80,
+      443
+    ],
+    "connect_timeout_s": 10,
+    "read_timeout_s": 15,
+    "allow_private_hosts": false,
+    "_allow_private_hosts_note": "TEST-ONLY ESCAPE HATCH. Must stay false in every real run. When true, the SSRF guard permits private/loopback addresses and any port, so the E2E suite can audit the localhost fixture server. Enabling it against untrusted input reintroduces full SSRF exposure.",
+    "html_content_types": [
+      "text/html",
+      "application/xhtml+xml"
+    ],
+    "_html_content_types_note": "PLAN.md §10 requires text/html only for page content. Without enforcement a PDF, JSON API or image would be fetched and parsed as HTML, producing garbage findings on unseen sites."
   },
-
-  "engagement_orientation": {
-    "first_viewport_px": 800,
-    "require_h1": true,
-    "value_prop_signal_verbs": ["build", "create", "manage", "automate", "help", "audit", "analyze", "sell", "track"],
-    "require_cta": true,
-    "min_body_font_px": 14
+  "robots": {
+    "_note": "Two DISTINCT robots concerns, deliberately separated. (1) `audit_user_agent_gate`: may CitelyAuditBot fetch at all? Operational only — if disallowed the orchestrator stops, emits one critical finding, and sets partial_reason 'blocked'. Never scored, because nobody blocklists an unknown auditor UA. (2) `ai_crawlers`: may the assistants' crawlers fetch? THIS is the scored signal (check access.ai_crawlers_allowed) — a site can allow us and still be invisible to ChatGPT.",
+    "ai_crawlers": [
+      {
+        "token": "GPTBot",
+        "operator": "OpenAI",
+        "powers": "ChatGPT browsing and training"
+      },
+      {
+        "token": "OAI-SearchBot",
+        "operator": "OpenAI",
+        "powers": "ChatGPT Search results"
+      },
+      {
+        "token": "ChatGPT-User",
+        "operator": "OpenAI",
+        "powers": "user-initiated ChatGPT fetches"
+      },
+      {
+        "token": "ClaudeBot",
+        "operator": "Anthropic",
+        "powers": "Claude retrieval and training"
+      },
+      {
+        "token": "Claude-Web",
+        "operator": "Anthropic",
+        "powers": "Claude web browsing"
+      },
+      {
+        "token": "PerplexityBot",
+        "operator": "Perplexity",
+        "powers": "Perplexity answers and citations"
+      },
+      {
+        "token": "Google-Extended",
+        "operator": "Google",
+        "powers": "Gemini and AI Overviews grounding"
+      },
+      {
+        "token": "CCBot",
+        "operator": "Common Crawl",
+        "powers": "the corpus many open LLMs train on"
+      },
+      {
+        "token": "Applebot-Extended",
+        "operator": "Apple",
+        "powers": "Apple Intelligence"
+      }
+    ],
+    "_crawler_list_note": "Tokens live in config so they can be updated as operators add or rename crawlers, with no code change. Matching is case-insensitive per RFC 9309."
+  },
+  "page_selection": {
+    "_note": "max_pages is a budget-derived MAXIMUM, not a guarantee. Pages skipped for budget yield `unknown` checks (excluded from the denominator), so a short scan lowers confidence rather than the score.",
+    "_language_neutrality": "Selection is STRUCTURAL, never lexical. PLAN.md §8 forbids assuming URL conventions, so we do NOT match /about, /faq etc. — that is English-only and silently degrades to homepage-only on any non-English site. Pages are ranked by nav membership and URL depth, which behave identically in every language.",
+    "max_pages": 5,
+    "prefer_nav_links": true,
+    "max_path_depth": 2,
+    "nav_selectors": [
+      "nav",
+      "header nav",
+      "[role=navigation]",
+      "header"
+    ],
+    "sitemap_fallback": true,
+    "max_sitemap_urls_scanned": 500,
+    "max_sitemap_bytes": 2097152,
+    "follow_sitemap_index": true,
+    "max_sitemap_index_children": 3,
+    "exclude_extensions": [
+      ".pdf",
+      ".jpg",
+      ".jpeg",
+      ".png",
+      ".gif",
+      ".svg",
+      ".webp",
+      ".zip",
+      ".mp4",
+      ".mp3",
+      ".css",
+      ".js",
+      ".xml",
+      ".json"
+    ]
+  },
+  "language": {
+    "_note": "Checks with requires_language=true resolve to `unknown` (never `fail`) when detection is absent or the language is unsupported. Without this gate, every non-English site would produce a wall of false positives.",
+    "supported": [
+      "en"
+    ]
+  },
+  "external_lookup": {
+    "_note": "Wikidata corroboration runs in the orchestrator's fetch stage (left of the artifact boundary), never inside an analyzer. Off by default.",
+    "enabled": false,
+    "allowed_domains": [
+      "wikidata.org",
+      "www.wikidata.org"
+    ],
+    "timeout_s": 5
+  },
+  "render": {
+    "_note": "Tier A = real Chromium render. Tier B = browserless SPA heuristic when no browser is available. Disclosed via diagnostics.render_mode. Chromium is provisioned as a SETUP step, never inside the timed run.",
+    "viewport_width": 1280,
+    "viewport_height": 800,
+    "_viewport_note": "Desktop 1280x800. Height matches first_viewport_px in checks.json — these two MUST stay in sync or the above-the-fold engagement checks measure a different box than they render.",
+    "wait_until": "load",
+    "_wait_until_note": "MUST NOT be networkidle. That state needs 500ms with <=2 connections in flight, which analytics beacons, chat widgets and long-polling never allow, so it does not fire and the whole render budget is spent waiting. Measured on python.org: load 1.2s, domcontentloaded 3.9s, networkidle 20.0s then timeout. Network quiescence is pursued separately, bounded by network_quiet_ms, and its expiry is recorded, never raised.",
+    "nav_timeout_ms": 15000,
+    "network_quiet_ms": 3000,
+    "settle_ms": 1200,
+    "max_render_ms": 20000,
+    "_budget_note": "nav_timeout_ms + network_quiet_ms + settle_ms are all clamped inside max_render_ms, which is itself clamped by the global deadline. A navigation timeout SALVAGES the DOM rather than discarding it: the milestone failing to fire does not mean the page is absent.",
+    "capture_console_errors": true,
+    "max_console_errors": 25,
+    "_tier_b_note": "Tier-B signals used when no browser is available. These are POSITIVE EVIDENCE of client-side rendering, never a requirement: a site that matches none of them is not penalised, it simply yields a lower-confidence result. Markers are in config so new frameworks need no code change.",
+    "spa_mount_selectors": [
+      "#root",
+      "#app",
+      "#__next",
+      "#__nuxt",
+      "[data-reactroot]",
+      "[ng-app]"
+    ],
+    "spa_framework_markers": [
+      "__NEXT_DATA__",
+      "window.__NUXT__",
+      "ng-version",
+      "data-server-rendered",
+      "__remixContext",
+      "__sveltekit",
+      "window.__INITIAL_STATE__",
+      "data-vue-meta"
+    ],
+    "spa_script_to_text_ratio": 3.0
   }
 }
