@@ -27,6 +27,8 @@
     "crawl_ms": 0,
     "playwright_available": false,
     "render_mode": "heuristic",
+    "render_nav_state": null,
+    "render_wait_strategy": null,
     "pages_checked": [
       "file://tests/fixtures/broken_page.html"
     ],
@@ -43,6 +45,7 @@
     "user_agent": "CitelyAuditBot/0.1 (+https://example.com/citely-bot)",
     "robots_checked": false,
     "external_lookup": false,
+    "advisor": {},
     "checks_evaluated": 4,
     "checks_unknown": 20,
     "errors": []
@@ -70,7 +73,8 @@
       "points_recoverable": 6.0,
       "suggested_action": {
         "summary": "Server-render or pre-render the page so its key facts are present in the initial HTML, before any JavaScript runs.",
-        "priority": "critical"
+        "priority": "critical",
+        "validation": "Run `curl -sS file://tests/fixtures/broken_page.html | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix â€” no markup change reproduces it."
       },
       "id": "F-001"
     },
@@ -91,11 +95,13 @@
       "points_recoverable": 2.5,
       "suggested_action": {
         "summary": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives.",
-        "priority": "medium"
+        "priority": "medium",
+        "snippet": "<!-- In <head>. Without it, mobile browsers render at desktop width and zoom out. -->\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+        "validation": "Open the page on a phone, or in device emulation, and confirm the text is readable without pinch-zooming."
       },
       "id": "F-002"
     }
   ],
   "recommendations": [],
-  "_note": "GENERATED from tests/fixtures/broken_page.html (a client-rendered shell). Do not hand-edit; timestamps pinned so the committed file is stable."
+  "_note": "GENERATED from tests/fixtures/broken_page.html (a client-rendered shell). Do not hand-edit; timestamps pinned so the committed file is stable. Findings carry the Phase-7 snippet and validation procedure. This page emits no proactive recommendations, which is correct: it has no FAQ, no images and no numeric claims, and a proactive suggestion that fires on every page is noise. Firing examples live in tests/fixtures/advisor_*.html."
 }

@@ -116,8 +116,15 @@ ANALYZERS = [
     ("engagement-orientation-audit", "engagement_orientation.py"),
 ]
 
+# The advisor is NOT an analyzer and is deliberately kept out of the list above: it emits advice,
+# not check states, it runs after scoring rather than before it, and it takes a different argument
+# set. Folding it into the fan-out would mean one loop pretending two contracts are the same one.
+ADVISOR = ("remediation-advisor", "advise.py")
+
 ANALYZER_TIMEOUT_S = 60
+ADVISOR_TIMEOUT_S = 30
 MAX_ANALYZER_STDOUT = 8 * 1024 * 1024
+EMPTY_ADVICE = {"corrective": [], "recommendations": []}
 
 # States that constitute a reportable defect. `partial` counts: a title that exists but is far too
 # long is a genuine, actionable problem, and omitting it would be a miss.
@@ -198,6 +205,99 @@ def run_analyzer(skill: str, script: str, artifact_path: Path, errors: list,
                        "message": f"{skill}: stdout was not valid JSON"})
         return []
     return rows if isinstance(rows, list) else []
+
+
+def run_advisor(workdir: Path, artifact_path: Path, findings: list, resolved: dict,
+                errors: list, deadline: float | None) -> dict:
+    """Ask remediation-advisor for snippets and proactive suggestions.
+
+    Enrichment, not analysis. Every failure here costs the reader their copy-paste snippets and
+    nothing else: findings keep the registry's prose remediation, the score is untouched, and the
+    report stays schema-valid. That is why it returns empty advice rather than raising.
+
+    It receives the resolved check states as well as the findings, because a proactive suggestion
+    has to know what PASSED. Findings only carry what failed, and a suggestion built from that
+    alone would repeat a defect the reader has already been told about.
+    """
+    skill, script = ADVISOR
+    path = SKILLS_DIR / skill / "scripts" / script
+    if not path.exists():
+        errors.append({"stage": "advise", "type": "missing", "message": f"{skill}: script not found"})
+        return dict(EMPTY_ADVICE)
+
+    timeout = ADVISOR_TIMEOUT_S
+    if deadline is not None:
+        timeout = max(1, min(timeout, int(deadline - time.monotonic())))
+
+    try:
+        findings_path = workdir / "findings.json"
+        states_path = workdir / "check-states.json"
+        findings_path.write_text(json.dumps(findings), encoding="utf-8")
+        states_path.write_text(
+            json.dumps({cid: r.state for cid, r in resolved.items()}), encoding="utf-8")
+        proc = subprocess.run(
+            [sys.executable, str(path), "--artifact", str(artifact_path),
+             "--findings", str(findings_path), "--check-states", str(states_path),
+             "--config", str(CHECKS_PATH)],
+            capture_output=True, text=True, timeout=timeout, cwd=str(REPO_ROOT),
+            env=_analyzer_env(),
+        )
+    except subprocess.TimeoutExpired:
+        errors.append({"stage": "advise", "type": "timeout", "message": f"{skill}: exceeded {timeout}s"})
+        return dict(EMPTY_ADVICE)
+    except Exception as exc:
+        errors.append({"stage": "advise", "type": "spawn_failed",
+                       "message": f"{skill}: {type(exc).__name__}"})
+        return dict(EMPTY_ADVICE)
+
+    if proc.stderr:
+        for line in proc.stderr[:MAX_FORWARDED_STDERR].splitlines():
+            if line.strip():
+                sys.stderr.write(f"[{skill}] {line}\n")
+
+    if proc.returncode != 0:
+        errors.append({"stage": "advise", "type": "exit_code",
+                       "message": f"{skill}: exited {proc.returncode}"})
+    if len(proc.stdout) > MAX_ANALYZER_STDOUT:
+        errors.append({"stage": "advise", "type": "oversized_output", "message": skill})
+        return dict(EMPTY_ADVICE)
+
+    try:
+        advice = json.loads(proc.stdout or "{}")
+    except json.JSONDecodeError:
+        errors.append({"stage": "advise", "type": "bad_json",
+                       "message": f"{skill}: stdout was not valid JSON"})
+        return dict(EMPTY_ADVICE)
+    if not isinstance(advice, dict):
+        return dict(EMPTY_ADVICE)
+    return {"corrective": advice.get("corrective") if isinstance(advice.get("corrective"), list) else [],
+            "recommendations": advice.get("recommendations")
+            if isinstance(advice.get("recommendations"), list) else [],
+            # Carried through so an EMPTY recommendations list is explainable rather than
+            # mysterious: it says which detectors were suppressed to avoid repeating a finding and
+            # which stayed silent on language grounds. Silence with no account of itself is
+            # indistinguishable from a broken stage.
+            "diagnostics": advice.get("diagnostics") if isinstance(advice.get("diagnostics"), dict) else {}}
+
+
+def apply_advice(findings: list, advice: dict) -> None:
+    """Merge corrective advice into the findings, in place, by finding id.
+
+    Keyed by finding id and not by check id: the same check can fail on more than one page, and a
+    reader following F-004 must not be handed F-002's address. A finding with no entry keeps the
+    registry's prose remediation, which is why the merge only ever ADDS fields.
+    """
+    by_id = {entry.get("finding_id"): entry for entry in advice.get("corrective") or []
+             if isinstance(entry, dict) and entry.get("finding_id")}
+    for finding in findings:
+        entry = by_id.get(finding.get("id"))
+        if not entry:
+            continue
+        action = finding.setdefault("suggested_action", {})
+        for field in ("snippet", "validation", "placeholders_remaining"):
+            value = entry.get(field)
+            if value:
+                action[field] = value
 
 
 def to_check_results(rows: list, registry, errors: list) -> list:
@@ -384,41 +484,58 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         site = (artifact.get("final_url") or url or "").replace("https://", "").replace("http://", "")
         site = site.split("/")[0] or (url or "unknown")
 
-    # --- analyze -------------------------------------------------------------------------------
+    # --- analyze, score, advise ------------------------------------------------------------------
+    # The temp directory spans all three stages because the advisor needs the same artifact the
+    # analyzers read, and the findings do not exist until scoring has run. The `finally` still
+    # guarantees removal: the directory is 0700 and holds page-derived HTML, so a scoring exception
+    # must not leave it on disk.
+    import shutil
+    import tempfile
+
     rows: list = []
+    advice = dict(EMPTY_ADVICE)
     tmpdir = None
     try:
-        import tempfile
-        tmpdir = tempfile.mkdtemp(prefix="citely-")
-        os.chmod(tmpdir, 0o700)
-        artifact_path = Path(tmpdir) / "artifact.json"
-        artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
-        for skill, script in ANALYZERS:
-            rows.extend(run_analyzer(skill, script, artifact_path, errors, deadline))
-    except Exception as exc:
-        errors.append({"stage": "analyze", "type": "setup_failed", "message": type(exc).__name__})
+        artifact_path = None
+        try:
+            tmpdir = tempfile.mkdtemp(prefix="citely-")
+            os.chmod(tmpdir, 0o700)
+            artifact_path = Path(tmpdir) / "artifact.json"
+            artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+            for skill, script in ANALYZERS:
+                rows.extend(run_analyzer(skill, script, artifact_path, errors, deadline))
+        except Exception as exc:
+            errors.append({"stage": "analyze", "type": "setup_failed",
+                           "message": type(exc).__name__})
+
+        # --- score -------------------------------------------------------------------------
+        results = to_check_results(rows, registry, errors)
+        language_supported = bool((artifact.get("language") or {}).get("supported"))
+        resolved = scoring.resolve_states(
+            results, registry, config,
+            language_supported=language_supported,
+            blocked_before_fetch=bool(artifact.get("blocked_before_fetch")))
+
+        cat_scores = scoring.category_scores(resolved, registry, config)
+        overall = scoring.overall_score(cat_scores, config)
+        findings = scoring.assign_finding_ids(
+            build_findings(resolved, registry, config, raw_registry), config)
+        summary = scoring.summarize(
+            findings, cat_scores, overall,
+            scoring.score_confidence(resolved, registry, config),
+            coverage_ratio=scoring.coverage(resolved, registry, config),
+            cat_coverage=scoring.category_coverage(resolved, registry, config))
+
+        # --- advise ------------------------------------------------------------------------
+        # Runs after scoring and cannot influence it: the summary above is already final, and the
+        # advisor only ever adds fields to findings that exist. Proactive items land in their own
+        # top-level list, outside the counts the schema's invariant governs.
+        if artifact_path is not None:
+            advice = run_advisor(Path(tmpdir), artifact_path, findings, resolved, errors, deadline)
+            apply_advice(findings, advice)
     finally:
         if tmpdir:
-            import shutil
             shutil.rmtree(tmpdir, ignore_errors=True)
-
-    # --- score ---------------------------------------------------------------------------------
-    results = to_check_results(rows, registry, errors)
-    language_supported = bool((artifact.get("language") or {}).get("supported"))
-    resolved = scoring.resolve_states(
-        results, registry, config,
-        language_supported=language_supported,
-        blocked_before_fetch=bool(artifact.get("blocked_before_fetch")))
-
-    cat_scores = scoring.category_scores(resolved, registry, config)
-    overall = scoring.overall_score(cat_scores, config)
-    findings = scoring.assign_finding_ids(
-        build_findings(resolved, registry, config, raw_registry), config)
-    summary = scoring.summarize(
-        findings, cat_scores, overall,
-        scoring.score_confidence(resolved, registry, config),
-        coverage_ratio=scoring.coverage(resolved, registry, config),
-        cat_coverage=scoring.category_coverage(resolved, registry, config))
 
     partial, reason = _partial_reason(artifact, resolved, errors)
     pages = [p for p in (artifact.get("pages") or []) if isinstance(p, dict)]
@@ -447,6 +564,7 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
             "user_agent": artifact.get("user_agent", ""),
             "robots_checked": bool((artifact.get("robots") or {}).get("checked")),
             "external_lookup": bool(allow_external),
+            "advisor": advice.get("diagnostics") or {},
             "checks_evaluated": sum(1 for r in resolved.values() if r.state != scoring.UNKNOWN),
             "checks_unknown": sum(1 for r in resolved.values() if r.state == scoring.UNKNOWN),
             "errors": errors,
@@ -454,7 +572,11 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         "partial": partial,
         "partial_reason": reason,
         "findings": findings,
-        "recommendations": [],   # populated by remediation-advisor in Phase 7
+        # Proactive suggestions from remediation-advisor. Deliberately a separate list: the
+        # mandated schema floor requires total_findings == critical + high + medium, so anything
+        # that is not a defect must stay outside findings[] or it breaks that invariant — and it
+        # would also let beyond-problem advice move a score it has no business touching.
+        "recommendations": advice.get("recommendations") or [],
     }
 
 

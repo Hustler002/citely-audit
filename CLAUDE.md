@@ -27,13 +27,47 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 
 ## Repository state (verified)
 
-- **Path / git root:** `C:\Users\PRIYANSHU PAL\Desktop\ADOBE\citely-audit`
-- **Branch:** `main` · **Commits:** 7, latest `c4eecbe Enhance entity declaration checks and add
-  comprehensive tests` (51 files tracked, as of 2026-09-10). The 2026-09-10 resilience work is
-  uncommitted.
+> **Development moved to a second machine on 2026-09-10.** Paths in this repo are **not portable** —
+> never copy an absolute path out of a doc without checking it against the machine you are on.
+> Machine-specific setup lives in [Local environment](#local-environment-current-machine) below.
+
+- **Path / git root:** `C:\Users\DEVANSH\OneDrive\Desktop\ADOBE_HACK\citely-audit` (current machine).
+  Previously `C:\Users\PRIYANSHU PAL\Desktop\ADOBE\citely-audit` — historical, do not use.
+- **Branch:** `feature/devansh-singh`, sitting exactly at `origin/main` (`437104b`, the merge of the
+  phase 1-6 work). Ongoing phase-7 work continues on this branch. Working tree clean, 51 files tracked.
+- **Remote:** `origin` on GitHub. Local `main` is intentionally behind and is not used for development.
 - `.gitignore` present; `PLAN.md` is tracked.
 - Project renamed `brand-ai-readiness-audit` → **`citely-audit`**. Identity fields rebranded;
   **skill folder names deliberately unchanged** (descriptive + agentskills.io-valid).
+
+## Local environment (current machine)
+
+Verified working on 2026-09-10: **848 passed, 13 skipped**, and `python.org` reproduces its recorded
+score of 90.
+
+**Python 3.12 is required in practice, not just 3.11+.** The machine shipped only Python 3.14, on which
+`pip install -e .` **cannot succeed as pinned**: neither `lxml==5.3.0` nor `greenlet==3.0.3` (pulled in by
+`playwright==1.47.0`) publishes a cp314 wheel, and both would fall back to a source build. Python 3.12.10
+was installed alongside 3.14 rather than relaxing the pins, because the pins are what make the recorded
+scores reproducible. **Do not "fix" a fresh-machine install by bumping the pins** — install 3.12 instead.
+
+```powershell
+# one-time setup, run from the repo root
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+python -m playwright install chromium      # ~345 MB, provisions Tier A; setup only, never inside a run
+```
+
+**Playwright browser location.** Chromium normally lands in `%LOCALAPPDATA%\ms-playwright` and is found
+with no configuration. It is only worth knowing that a **packaged/containerised shell** (the Claude
+desktop app is one) has its `%LOCALAPPDATA%` writes redirected into the package's `LocalCache`, and the
+Windows loader then cannot resolve Chromium's private side-by-side assembly — `chrome.exe` fails with
+*"the side-by-side configuration is incorrect"* and the audit silently degrades to Tier B. The fix is to
+provision the browsers at a path outside `AppData\Local` and point `PLAYWRIGHT_BROWSERS_PATH` at it. A
+copy provisioned that way currently lives at `C:\Users\DEVANSH\ms-playwright`. **An ordinary VS Code or
+PowerShell terminal needs none of this.**
 
 ## Locked decisions (current — per PLAN.md v3; do not re-litigate)
 
@@ -108,6 +142,27 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 - **Analyzer subprocess stderr is forwarded, tagged and capped.** `capture_output=True` pipes the
   child's stderr, which was being discarded outright — the only diagnostic a failing analyzer
   produces. Capped, because the child is the component holding page-derived text.
+- **The advisor prescribes; it never measures, and it cannot move the score** (added 2026-09-11).
+  `remediation-advisor` runs AFTER scoring, emits no check state, and only ever ADDS fields to
+  findings that already exist. Proactive items go in `recommendations[]`, outside `summary` counts,
+  because the mandated floor requires `total_findings == critical + high + medium` — and because
+  beyond-problem advice must not be able to move a number it has no business touching. Asserted
+  end-to-end, not by convention: `test_the_advisor_cannot_change_the_score` runs the same audit with
+  the advisor present and absent and compares score, coverage and finding ids.
+- **A snippet is filled only from values OBSERVED on the page** (added 2026-09-11). Unobserved
+  placeholders stay literal and are listed in `placeholders_remaining`, which is the deliverable
+  rather than a failure: it tells the reader which facts they must supply instead of handing them a
+  fabrication. No LLM touches the advice path, for the same reason none touches scoring.
+- **A copy-paste snippet that does not parse is worse than none** (added 2026-09-11). Snippets
+  declare a `snippet_json` shape and a test parses each one after substitution. This caught a real
+  defect: the `sameas_authority` snippet joined observed profile links with no trailing comma and
+  then appended another array element, so a site that already had one profile link was handed
+  JSON-LD that looked complete and did not parse.
+- **A proactive suggestion never repeats a finding, and suppression is checked AFTER the detector
+  runs** (added 2026-09-11). Suppressing first was cheaper but recorded "already reported as a
+  finding" for detectors that had nothing to say — on four of five real sites sampled — so the
+  diagnostics asserted a redundancy that was never established. `suppressed` now means exactly one
+  thing: this had something to report and it was withheld.
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
@@ -197,20 +252,64 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 - Base spec has **no** `marketplace.json` / `entrypoint` concept — bespoke to this brief.
 - Official validator: `skills-ref validate ./<skill>` (github.com/agentskills/agentskills).
 
-## Current status: PHASE 6 COMPLETE — **the audit runs end-to-end and emits a real report**
+## Current status: PHASE 7 COMPLETE — **every finding now ships with a fix and a way to check it**
 
-**848 tests, 13 skipped.** **Citely is now a working tool.** `run_audit.py` fetches, selects pages,
-renders, runs all four analyzers as subprocesses, scores, and emits a schema-valid JSON report.
+**922 tests, 13 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
+copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
+defect was found. The marketplace is now **six skills**, one entrypoint.
 
-Verified on real input:
-| Target | Score | Coverage | Findings |
-|---|---|---|---|
-| `https://example.com` (live) | 62/100 | 0.805 | 8 — all genuine (no structured data, 14-char title, no meta description) |
-| `https://www.python.org` (live) | **90/100** | 0.865 | 4 — was 77 / 0.795 / 5 before the 2026-09-10 render fixes |
-| healthy fixture | 99/100 | 0.85 | 1 |
-| **German fixture** | **98/100** | 0.698 | 1 — generalization proven: the gap shows as *coverage*, not failures |
-| SPA shell | 30/100 | 0.175 | 2 |
-| deep-chrome fixture | 75/100 | 0.68 | 2 — the python.org shape, `<h1>` 41,752 chars into `<body>` |
+Verified on real input. **Re-measured 2026-09-10 on the second machine**, after the entity-trust
+generalization and the measurement-precision fixes recorded in the progress log. Fixture rows are
+`--html-file` runs; live rows are `--url` runs with Tier A. The superseded column is kept because the
+movement is the evidence that those two work items did what they claimed.
+
+| Target | Score | Coverage | Findings | Was (pre-generalization) |
+|---|---|---|---|---|
+| `https://example.com` (live) | 66/100 | 0.975 | 12 — all genuine (no structured data, 14-char title, no meta description) | 62 / 0.805 / 8 |
+| `https://www.python.org` (live) | **90/100** | 0.975 | 4 | 90 / 0.865 / 4; 77 / 0.795 / 5 before the render fixes |
+| healthy fixture | 99/100 | 0.85 | 1 | unchanged |
+| **German fixture** | **98/100** | 0.698 | 1 — generalization proven: the gap shows as *coverage*, not failures | unchanged |
+| SPA shell (`broken_page.html`) | 30/100 | 0.175 | 2 | unchanged |
+| hydrating SPA (`spa_hydrating.html`) | 80/100 | 0.175 | 1 | not previously tabulated — **see the SPA headline problem below** |
+| deep-chrome fixture | 76/100 | 0.85 | 6 — the python.org shape, `<h1>` 41,752 chars into `<body>` | 75 / 0.68 / 2 |
+
+Coverage rising toward 1.0 on live sites is the intended effect of the entity work: checks that used to
+return `unknown` are now measurable. The extra findings on `example.com` and the deep-chrome fixture are
+those newly-measured checks reporting, not new defects.
+
+> **Correction (2026-09-11).** An earlier revision of this table reported the SPA shell as having
+> drifted 30 -> 80. It had not. The row has always meant `broken_page.html`, which still returns
+> 30 / 0.175 / 2 exactly, and is also the source of `sample-report.json`. The 80 belongs to a
+> different fixture, `spa_hydrating.html`, which was never in this table. Both rows are now named
+> by file, because "SPA shell" was ambiguous between two fixtures that legitimately score very
+> differently — one is a dead shell whose bundles 404, the other genuinely hydrates.
+
+#### ⚠ The SPA headline problem — **deferred to Phase 8** (decided 2026-09-10)
+
+`spa_hydrating.html` reports **80/100 at 0.175 coverage**. This is not a regression and never was:
+only 17.5% of total check weight is measurable on a page that builds itself in the browser, and the
+few checks that survive are ones it happens to satisfy. Human Orientation reads **100.0 off
+`category_coverage` 0.1** — a single surviving check. The engine is behaving exactly as the
+capability model specifies. `broken_page.html`, a deader shell, scores 30 at the same coverage, and
+the gap between the two is the point: coverage this thin makes the headline arbitrary.
+
+**The defect is in output design, not in scoring.** A page that no AI assistant can read presents an
+80 as its headline number, and the coverage figure that disproves it sits beside it as an equal peer.
+This is the successor to open issue #10, and the same reasoning applies: `category_coverage` makes the
+problem *visible* but does nothing to stop the headline being *misread*.
+
+**Fix belongs in Phase 8 (non-expert output layer, PLAN.md §9), not in `_scoring.py`.** Rationale:
+- Suppressing or penalising the score would put a presentation concern inside the scoring spine, where
+  the whole project's determinism and auditability guarantees live.
+- PLAN.md §9 layer 1 is already specified as a plain-language verdict per category. A page scoring 80
+  on 17.5% coverage must not be allowed to render a verdict sentence that reads like a pass.
+- The standing rule in Locked decisions — *never show a score without coverage* — needs to become a
+  property the renderer **enforces**, not a convention the reader is trusted to honour.
+
+Phase 8 acceptance criterion for this: the rendered output for `spa_hydrating.html` must lead with the
+fact that the page could not be read, and must not let 80 or 100.0 stand as an unqualified headline
+anywhere.
 
 Run it:
 ```bash
@@ -219,8 +318,8 @@ Run it:
 ```
 stdout is the report and nothing else; logs go to stderr. `--ci` exits 1 on any critical finding.
 
-Still to come: `remediation-advisor` (Phase 7) fills `recommendations[]` and enriches findings with
-copy-paste snippets; the non-expert output layer and HTML report are Phase 8.
+Still to come: the non-expert output layer and HTML report (Phase 8), the precision/recall harness
+(Phase 9), and compliance sign-off (Phase 10).
 
 ### Implementation phases
 | Phase | Scope | Status |
@@ -231,8 +330,8 @@ copy-paste snippets; the non-expert output layer and HTML report are Phase 8.
 | 4 | Structural analyzers (crawl/render/extraction, entity) | ✅ **DONE** |
 | 5 | Parity analyzers + i18n (engagement, quotability) | ✅ **DONE** |
 | 6 | Orchestration & report assembly | ✅ **DONE** |
-| 7 | `remediation-advisor` (6th skill) + proactive suggestions | next |
-| 8 | Non-expert output layer + `render_html.py` | |
+| 7 | `remediation-advisor` (6th skill) + proactive suggestions | ✅ **DONE** |
+| 8 | Non-expert output layer + `render_html.py` — **must also fix the SPA headline problem** (see Current status) | next |
 | 9 | `labeled_corpus.json` + precision/recall + archetype fixtures | |
 | 10 | Compliance & sign-off (`skills-ref validate`, README) | |
 
@@ -267,7 +366,7 @@ copy-paste snippets; the non-expert output layer and HTML report are Phase 8.
 | 5 | **Disk headroom is thin** — ~738 MB free. Phase 3 needs ~150 MB for Chromium; the drive already hit 100% once during setup. | Medium | Monitor |
 | 6 | Chromium not provisioned | Low | ✅ **RESOLVED** — installed, Tier A verified |
 | 9 | **Content-type was unenforced** (PLAN §10), **timeouts duplicated** across `budgets`/`fetch`/`render`, **global deadline unwired**, size cap gap, undeclared artifact fields, 3 dead config keys, dead code, stale role enum. | High→Low | ✅ **ALL 8 RESOLVED 2026-09-05** |
-| 10 | **A category can score 100 from a single measurable check.** On the SPA fixture, Human Orientation reads 100.0 because 5 of its 6 checks were suppressed and only `viewport_meta` remained. Overall `coverage` (0.23) exposes this, but a per-CATEGORY coverage figure would stop a category headline being read as a clean bill of health. Relevant to the rubric's output-design criterion. | Medium | Decide in Phase 6/8 |
+| 10 | **A category can score 100 from a single measurable check.** On the SPA fixture, Human Orientation reads 100.0 because 5 of its 6 checks were suppressed and only `viewport_meta` remained. Overall `coverage` exposes this, but a per-CATEGORY coverage figure would stop a category headline being read as a clean bill of health. Relevant to the rubric's output-design criterion. | Medium | **Partly resolved** — `summary.category_coverage` shipped in Phase 6. The residual half (the headline is *visible* but still *misreadable*) is now tracked as **the SPA headline problem** and is **assigned to Phase 8**; see Current status. |
 | 8 | **Browser relaunched per page.** `render_page` launches Chromium for every page (~3-4 s of the ~5 s per-page cost). At 5 pages that is ~25 s of the 270 s budget — acceptable now, but reusing one browser across pages is the obvious win if the budget ever tightens. | Low | Optimize if needed |
 
 | 7 | **`allow_private_hosts` is a live SSRF bypass switch.** Default false and test-only, but if it were ever set true in a real run the guard is fully disabled. Phase 3 must pass it only from test fixtures, never from CLI input. | Medium | Guard in Phase 3 |
@@ -404,6 +503,38 @@ slice would have cut mid-tag · `timeout=0` reaching Playwright, which reads it 
 Also extended `test_embedded_thresholds_match_registry` to the two Phase-5 analyzers, which it had
 never covered despite this file claiming drift is caught by tests.
 
+### Phase 7 delivered
+- [x] **6th skill `remediation-advisor`** — the marketplace's only *prescription* skill. Consumes
+      findings, resolved check states and the crawl artifact; emits corrective snippets and
+      proactive suggestions. Declared in `marketplace.json`; still exactly one entrypoint.
+- [x] `references/advice-schema.json` — the **fourth** cross-process contract, alongside the crawl
+      artifact, the check-result and the report schemas.
+- [x] `references/remediation-templates/{corrective,proactive}.json` — snippet and validation text.
+      All **24 checks** carry a validation procedure; snippets are `null` only where pasting markup
+      cannot fix the problem (a 500 response, a client-rendered architecture).
+- [x] **Four proactive detectors**, each with a fixture that fires it and a near-miss that must stay
+      silent: `R:faq_schema`, `R:facts_in_prose`, `R:undated_claims`, `R:image_facts_with_alt`.
+- [x] Orchestrator wiring: the temp dir now spans analyze → score → advise, still removed in a
+      `finally` because it is 0700 and holds page-derived HTML.
+- [x] `sample-report.json` regenerated — score, coverage and findings **byte-identical**, now with
+      snippets and validation attached.
+- [x] `tests/test_remediation_advisor.py` (72). **Eight mutations applied, all caught.**
+
+### Phase 7 — what the mutations found
+
+Two of the eight initially SURVIVED, and both were tests passing for the wrong reason. This is now
+the third time this project has hit that exact failure mode, after the chrome-cap test in the
+render work and the share-widget test in the entity work.
+
+| Test | Passed because | Fixed by |
+|---|---|---|
+| `..._ignores_a_question_with_no_answer` | Both headings were under the 8-character minimum-question filter, so the detector never got as far as looking for an answer | Longer questions, plus a separate test for the length floor |
+| `..._is_silent_once_a_machine_readable_date_is_present` | Its sentence carried two claims against a threshold of three, so the detector could not have fired with or without the date | One shared 3-claim sentence across all four tests, with the claim count asserted explicitly |
+
+The harness itself also lied once: a mutation reported as surviving had been served from a stale
+`.pyc`, because a file written and reverted inside one filesystem timestamp tick can defeat
+mtime-based invalidation. The mutation runs now set `PYTHONDONTWRITEBYTECODE`.
+
 ### Not yet done — implementation order (PLAN.md §14)
 - [x] ~~**2.** `_safe_fetch.py` + security corpus.~~ **DONE**
 - [ ] **3.** Artifact assembly, `_page_select.py` (sitemap → homepage fallback), `_render.py` (Tier A/B);
@@ -411,14 +542,16 @@ never covered despite this file claiming drift is caught by tests.
 - [x] ~~**4.** structural analyzers~~ **DONE**
 - [x] ~~**5.** parity analyzers + i18n~~ **DONE**
 - [x] ~~**6.** Orchestrator wiring → schema-valid JSON report.~~ **DONE**
-- [ ] **7.** `remediation-advisor` skill (**new, 6th**) incl. non-obvious proactive suggestions.
+- [x] ~~**7.** `remediation-advisor` skill (**new, 6th**) incl. non-obvious proactive suggestions.~~ **DONE**
 - [ ] **8.** Non-expert output layer + `render_html.py` (folded in — `report-renderer` was cut as padding).
+      **Carries an extra acceptance criterion:** the SPA headline problem — a shell scoring 80 at 0.175
+      coverage must not render an unqualified pass-shaped headline. See Current status.
 - [ ] **9.** `labeled_corpus.json` + precision/recall harness; non-English, consent-wall, adversarial fixtures.
 - [ ] **10.** `skills-ref validate` all 6 skills; README refresh; determinism + read-only sign-off.
 
 ### Structural deltas from the current scaffold (v3 requires)
 - **Add** `config/checks.json` (check registry) — does not yet exist.
-- **Add** 6th skill `remediation-advisor/`; **do not** add `report-renderer` (cut as padding).
+- ~~**Add** 6th skill `remediation-advisor/`~~ **DONE**; **do not** add `report-renderer` (cut as padding).
 - **Split** `run_audit.py` into `_render.py`, `_page_select.py`, `_scoring.py`, `render_html.py`.
 - **Add** fixture archetypes: static, spa, ecommerce, corporate, image-heavy, unstructured,
   **non-english**, **consent-wall**, **adversarial** (+ `labeled_corpus.json`).
@@ -426,18 +559,48 @@ never covered despite this file claiming drift is caught by tests.
   `findings[].{page_url,check_id,measurement,threshold,selector,impact,plain_summary}`,
   `suggested_action.validation`, `partial_reason` enum; artifact gains `pages[]` + `external_corroboration`.
 
-## How to run / verify (once implemented)
+## How to run / verify
 
-From the repo root (`citely-audit`):
-```bash
-pip install -e .
-python -m playwright install chromium            # setup step, optional (Tier A)
-python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com
-python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
-pytest
-for s in skills/*/; do skills-ref validate "$s"; done
+Setup is in [Local environment](#local-environment-current-machine) and only needs doing once. Everything
+below runs from the repo root with the virtual environment **activated**.
+
+```powershell
+.\.venv\Scripts\Activate.ps1                     # PowerShell — VS Code's default terminal
 ```
-Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`.
+`.venv\Scripts\activate.bat` for cmd, `source .venv/Scripts/activate` for Git Bash. The prompt gains a
+`(.venv)` prefix; `where python` should then point inside `.venv\Scripts`.
+
+```bash
+python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
+python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
+python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
+pytest -q                                                                                  # 922 passed, 13 skipped
+for s in skills/*/; do skills-ref validate "$s"; done                                      # Phase 10, not installed yet
+```
+
+Each analyzer skill is also independently runnable, which is what makes the folders agentskills.io
+skills rather than modules of one program:
+```bash
+python skills/crawl-render-extraction-audit/scripts/crawl_render_extract.py --html-file page.html
+python skills/quotability-density-audit/scripts/quotability_density.py     --html-file page.html
+python skills/entity-corroboration-audit/scripts/entity_corroboration.py   --html-file page.html
+python skills/engagement-orientation-audit/scripts/engagement_orientation.py --html-file page.html
+python skills/remediation-advisor/scripts/advise.py                        --html-file page.html
+```
+The advisor's standalone mode runs the proactive detectors only — with no findings to prescribe
+against, there is nothing corrective to say. Its full input set is `--findings`, `--check-states`
+and `--artifact`, which is what the orchestrator passes.
+
+Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`. That separation is
+enforced, not merely intended — see the stdout contract in Locked decisions — so redirecting stdout to a
+file always yields valid JSON:
+```bash
+python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com > report.json
+```
+In PowerShell the two streams render into one console, which **looks like** contamination and is not;
+`>` still captures stdout alone.
+
+Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` instead of `python`.
 
 ## Conventions & guardrails
 
@@ -734,3 +897,95 @@ Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`.
   dev.to: 82 -> **87**, findings 5 -> 4, severity 2C/3H/0M -> 1C/1H/2M, all three false positives
   gone. eff.org 80 -> 83, github.com 85 -> 88. Every fixture score unchanged.
   Test count 821 -> 848; `tests/test_measurement_precision.py` (27), four mutations all caught.
+- 2026-09-10 — **Migrated to a second development machine; phases 1-6 re-verified from a clean
+  environment.** Branch `feature/devansh-singh`, sitting at `origin/main` after the phase 1-6 work was
+  merged. No source changes; documentation and environment only.
+  **Python 3.14 could not build the project and the pins were not relaxed.** The new machine shipped
+  3.14 alone, which has no cp314 wheel for `lxml==5.3.0` or for `greenlet==3.0.3` (a `playwright==1.47.0`
+  dependency), so `pip install -e .` would have fallen back to source builds. Checked with
+  `pip download --only-binary=:all:` rather than by attempting the install and reading the wreckage.
+  Installed Python **3.12.10** alongside and built `.venv` from it, so every pin resolves byte-identical
+  to the first machine — the precondition for the recorded scores meaning anything.
+  **A Chromium failure worth recording, because the error names the wrong culprit.** `chrome.exe` died
+  with *"the side-by-side configuration is incorrect"*, which reads like a missing Visual C++
+  redistributable. It was not: the redistributable was present, and the 345 MB install was complete and
+  uncorrupted. The Windows event log named the real dependent assembly — Chromium's own private
+  `129.0.6668.29` manifest — and the cause was **path redirection**. A packaged/containerised shell has
+  its `%LOCALAPPDATA%` writes redirected into the package's `LocalCache`, and the loader cannot resolve a
+  private side-by-side assembly through that redirection. Provisioning the browsers outside
+  `AppData\Local` and pointing `PLAYWRIGHT_BROWSERS_PATH` at them fixes it. An ordinary terminal is
+  unaffected. Recorded because the symptom would otherwise send the next person to reinstall a runtime
+  that was never missing, and because a silent degrade to Tier B is exactly the failure this project
+  spent 2026-09-10 hunting.
+  **Verification: 848 passed, 13 skipped — the recorded count exactly.** `--ci` returns 0 on the healthy
+  fixture and 1 on the SPA shell. `python.org` reproduces at **90**.
+  **The score table in Current status was stale and has been re-measured.** It predated the two work
+  items logged immediately above it, so `example.com` (62 -> 66, coverage 0.805 -> 0.975, 8 -> 12
+  findings) and the deep-chrome fixture (0.68 -> 0.85 coverage, 2 -> 6 findings) had drifted without
+  anyone re-running them. The movement is the entity generalization making previously-`unknown` checks
+  measurable, which is what it was built to do. `python.org`'s row was the one the log had updated, and
+  it was already correct.
+  **A high score on very thin coverage is now a tracked Phase 8 item.** `spa_hydrating.html` returns
+  80 at 0.175 coverage, with Human Orientation at 100.0 off a single surviving check. Scoring is
+  behaving as specified; the problem is that a page which builds itself in the browser presents an 80
+  as its headline. Filed as the SPA headline problem under Current status, with an acceptance
+  criterion, and assigned to the Phase 8 output layer rather than to `_scoring.py` — putting a
+  presentation fix inside the scoring spine would cost the determinism guarantee the whole project
+  rests on. Issue #10 is updated to point at it.
+  **One correction to the entry above, found on 2026-09-11 while regenerating `sample-report.json`.**
+  I first reported this as a *drift*, 30 -> 80. It was not: I had measured `spa_hydrating.html`
+  against a table row that has always meant `broken_page.html`, which still returns 30 / 0.175 / 2
+  exactly and is the sample report's own source. The concern is real and stands; the drift was mine.
+  Both fixtures are now named by filename in the table, because "SPA shell" was ambiguous between two
+  files that legitimately score very differently.
+- 2026-09-11 — **Phase 7 complete. Every finding now carries a fix and a way to check it.**
+  Built `remediation-advisor`, the sixth skill and the only one that prescribes rather than measures:
+  corrective snippets bound to failing checks, a validation procedure on all 24, and four proactive
+  detectors for improvements where no defect was found. Test count 848 → **922**.
+  **Two contradictions in PLAN.md had to be settled before any code was written**, both found by
+  reading the plan against the registry rather than by implementing and discovering later.
+    1. §5.2 justified the skill as consuming "findings, not the artifact", while §7 requires snippets
+       filled from values OBSERVED on the page and every proactive example inspects the page. The
+       distinction that actually justifies the skill is CONCERN, not inputs. It now reads the artifact
+       as read-only evidence, emits no check state, and cannot move the score — the last asserted by
+       running the same audit with the advisor present and absent.
+    2. §7's second proactive example — an `Organization` with `sameAs` but no authority anchor — had
+       become the scored check `entity.sameas_authority` in the meantime. Building it would have
+       reported one root cause twice, which is the double-jeopardy defect fixed on 2026-09-10. Not
+       built, and pinned by a test so a future reader working from §7's list does not re-add it. The
+       "aim higher" variant was rejected too: the project already locked the finding that a local
+       business will never have a Wikidata entry.
+  **Three real defects found by running the detectors rather than reasoning about them:**
+    1. **A number is not a claim.** The first claim pattern matched any multi-digit run, so
+       python.org-style outline numbering — 1.1, 1.2, 1.3 — read as **107 factual claims** on the
+       deep-chrome fixture. Exactly the family of the image-fingerprint defect: a permissive numeric
+       pattern matches almost the whole web. Split into a language-neutral quantity pattern (currency,
+       percentage, thousands separator) and a language-gated one that also accepts a number bound to a
+       unit noun. 107 → 3.
+    2. **A snippet that did not parse.** `sameas_authority` joined observed profile links with no
+       trailing comma and then appended another array element, so any site that already had one
+       profile link received JSON-LD that LOOKED complete and was invalid — the worst possible failure
+       for something whose whole purpose is being pasted in unmodified. Fixed with a second
+       substitution form, and snippets now declare a `snippet_json` shape that a test parses.
+    3. **Suppression that asserted a redundancy it had not established.** Checking `suppressed_by`
+       before running the detector was cheaper, but recorded "already reported as a finding on X" for
+       detectors that had nothing to say — on four of five real sites sampled. Suppression now runs
+       after the detector, so the word means one thing only.
+  **Two of eight mutations survived the first run, both tests passing for the wrong reason** — the
+  third time this project has hit that failure mode. One was silenced by a minimum-question-length
+  filter rather than by the missing answer it claimed to test; the other used a two-claim sentence
+  against a three-claim threshold, so it could not have fired with or without the date it was
+  supposedly testing. Both rewritten with the confounding variable asserted away; all eight now caught.
+  The harness lied once too: a mutation reported as surviving had been served from a stale `.pyc`,
+  since a file written and reverted inside one filesystem timestamp tick defeats mtime invalidation.
+  **A correction to my own 2026-09-10 entry, found while regenerating `sample-report.json`.** I had
+  reported the SPA shell as drifting 30 → 80. It had not: the table row has always meant
+  `broken_page.html`, which still returns 30 / 0.175 / 2 exactly and is the sample report's own
+  source. I measured `spa_hydrating.html`, a different fixture that was never in the table. The
+  underlying concern — a high headline on very thin coverage — is real and remains a Phase 8 item;
+  the drift was mine. Both fixtures are now named by filename.
+  Live verification: `example.com` 66 and `python.org` 90, **both unchanged by the advisor**, with a
+  snippet and a validation procedure on every finding. Across five further live sites the detectors
+  behaved: wikipedia.org and djangoproject.com each emit one proactive item, developer.mozilla.org
+  correctly emits none. `sample-report.json` regenerated with score, coverage and findings
+  byte-identical.

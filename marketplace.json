@@ -33,6 +33,12 @@
       "path": "skills/engagement-orientation-audit",
       "entrypoint": false,
       "description": "Mechanic 5 — deterministic first-viewport orientation and visitor-retention heuristics over the rendered DOM."
+    },
+    {
+      "name": "remediation-advisor",
+      "path": "skills/remediation-advisor",
+      "entrypoint": false,
+      "description": "Prescription rather than detection — turns findings into copy-paste snippets with a validation procedure, and adds non-obvious proactive suggestions where no defect was found. Never invents business facts."
     }
   ],
   "_note": "marketplace.json and the `entrypoint` flag are this project's bespoke platform convention. They are NOT part of the base agentskills.io spec, which defines only the per-skill folder + SKILL.md format."

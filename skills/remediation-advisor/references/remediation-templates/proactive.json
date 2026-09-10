@@ -1,0 +1,60 @@
+{
+  "version": "1.0",
+  "_note": "Proactive suggestions — the rubric's 'beyond-problem suggestions, relevant and non-obvious'. Each is wording only; the detector that decides whether it fires lives in scripts/advise.py, because a detector is code and a template is text. The quality bar from PLAN.md §7 is that a generic SEO checklist would NOT produce these: each names a mechanism specific to how answer engines ingest a page.",
+  "_rules": {
+    "not_findings": "These never enter findings[], are excluded from summary counts, and are never scored. They can neither inflate nor deflate the discoverability score.",
+    "no_double_reporting": "`suppressed_by` names a check whose FINDING makes this suggestion redundant. Telling a site to add FAQPage markup directly beneath a critical finding that it has no structured data at all is noise, and reporting one root cause twice is the defect fixed on 2026-09-10.",
+    "language_gate": "`requires_language: true` means the detector uses word-level heuristics and must stay silent on a page whose language is undetected or unsupported, exactly as the language-dependent checks resolve to `unknown` rather than `fail`.",
+    "parseable_snippets": "`snippet_json` marks a snippet that MUST still parse once its placeholders are filled: 'ld+json' means the application/ld+json block inside it, 'fragment' means the object body outside any script tag. Enforced by test_remediation_advisor.py, because a copy-paste fix that does not parse is worse than no fix at all."
+  },
+  "detectors": {
+    "R:faq_schema": {
+      "category": "ai_comprehension",
+      "suppressed_by": [
+        "entity.structured_data_present"
+      ],
+      "requires_language": false,
+      "title": "Your FAQ answers are not marked up as an FAQ",
+      "summary": "This page already asks and answers questions in plain text. Wrapping those pairs in FAQPage markup makes each answer directly quotable by an answer engine, without writing a single new sentence.",
+      "rationale": "The content is already there, so this is one block of markup away rather than a content project. Answer engines match a user's question against marked-up question text far more reliably than against a heading that merely happens to end in a question mark — and an FAQ is the highest-value shape they can consume, because a question and its answer are pre-paired.",
+      "snippet": "<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"FAQPage\",\n  \"mainEntity\": [\n    {\n      \"@type\": \"Question\",\n      \"name\": \"{{QUESTION_1}}\",\n      \"acceptedAnswer\": { \"@type\": \"Answer\", \"text\": \"{{ANSWER_1}}\" }\n    }\n  ]\n}\n</script>\n\n<!-- Use the questions and answers already on the page, word for word. Do not write new ones:\n     FAQPage markup that does not match visible content is a structured-data violation. -->",
+      "validation": "Paste the URL into the Rich Results Test and confirm an FAQPage is detected, and that every question it lists is visible on the page in the same words.",
+      "snippet_json": "ld+json"
+    },
+    "R:facts_in_prose": {
+      "category": "ai_comprehension",
+      "suppressed_by": [
+        "content.scannable_blocks"
+      ],
+      "requires_language": true,
+      "title": "Your specifics are stranded in paragraphs",
+      "summary": "Several specification-shaped facts — figures with units, labelled values — sit inside prose rather than in a list or table. Moving them into a definition list or table makes them survive summarising.",
+      "rationale": "This is not the same as having no lists at all, which is already checked. It is that the facts most worth citing are the ones still in prose. When a summariser condenses a long page it drops sentences before it drops table rows, so a specification in a paragraph is the first thing to disappear and the exact thing a user was asking for.",
+      "snippet": "<!-- Move the figures out of the sentence and into rows. Same facts, extractable shape. -->\n<table>\n  <tr><th>{{FACT_LABEL}}</th><td>{{FACT_VALUE}}</td></tr>\n  <tr><th>{{FACT_LABEL_2}}</th><td>{{FACT_VALUE_2}}</td></tr>\n</table>",
+      "validation": "Read your page and list every number a customer would ask about. Confirm each one now appears in a table row or definition list, not only inside a sentence."
+    },
+    "R:undated_claims": {
+      "category": "ai_comprehension",
+      "suppressed_by": [],
+      "requires_language": true,
+      "title": "Your claims carry no date and no source",
+      "summary": "This page states figures but gives no publication date and cites nothing. Adding a visible date and naming where a figure comes from raises how much weight a retrieval system gives it.",
+      "rationale": "Extractability and credibility are different problems, and only the first is normally measured. A retrieval system that can read a claim perfectly well will still discount it when nothing says when it was true or who established it, because an undated figure cannot be checked for staleness. Sites optimise hard for the first and almost never for the second.",
+      "snippet": "<!-- A machine-readable date, plus attribution for the figure itself. -->\n<p>Last updated <time datetime=\"{{ISO_DATE}}\">{{HUMAN_DATE}}</time>.</p>\n\n<p>{{CLAIM_SENTENCE}} <cite><a href=\"{{SOURCE_URL}}\">{{SOURCE_NAME}}</a></cite></p>\n\n<!-- And declare the date to machines. This block is additive: it does not replace any\n     JSON-LD you already publish. -->\n<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"WebPage\",\n  \"url\": \"{{SITE_URL}}\",\n  \"datePublished\": \"{{ISO_DATE}}\",\n  \"dateModified\": \"{{ISO_DATE}}\"\n}\n</script>",
+      "validation": "Confirm the page shows a date a reader can see, and that it is inside a `<time datetime=…>` element or a `dateModified` field. For each headline figure, confirm a reader can tell where it came from.",
+      "snippet_json": "ld+json"
+    },
+    "R:image_facts_with_alt": {
+      "category": "ai_discoverability",
+      "suppressed_by": [
+        "extraction.facts_not_image_only"
+      ],
+      "requires_language": false,
+      "title": "Numbers that exist only in your alt text",
+      "summary": "Some figures appear in image alt text but nowhere in the page's own words. The alt text is doing its accessibility job correctly; the fact is still missing from the document.",
+      "rationale": "This passes every accessibility audit, which is why it survives. Alt text is an accessibility affordance attached to an image, not part of the page's prose, and extraction pipelines commonly drop attribute text while keeping body text. So the site is told it is compliant and stays invisible: the figure is readable to a screen reader and absent from the content an answer engine actually indexes.",
+      "snippet": "<!-- Keep the alt text. Add the same figure as real text, so it exists in the document too. -->\n<figure>\n  <img src=\"{{IMAGE_SRC}}\" alt=\"{{IMAGE_FACT_SUMMARY}}\">\n  <figcaption>{{IMAGE_FACT_SUMMARY}}</figcaption>\n</figure>",
+      "validation": "Copy the whole page into a plain-text editor. Every figure you want cited should still be there. Anything that vanished exists only in an attribute."
+    }
+  }
+}
