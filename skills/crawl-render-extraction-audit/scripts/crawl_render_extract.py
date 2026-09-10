@@ -64,7 +64,8 @@ CHECKS = ["access.http_ok", "access.ai_crawlers_allowed", "access.indexable",
 DEFAULT_THRESHOLDS = {
     "render.content_without_js": {"min_visible_chars_raw": 500, "empty_floor_chars": 50},
     "extraction.facts_not_image_only": {"max_image_only_fact_ratio": 0.5,
-                                        "min_images_to_evaluate": 3},
+                                        "min_images_to_evaluate": 3,
+                                        "min_fact_image_px": 64},
 }
 
 
@@ -373,6 +374,49 @@ def check_semantic_html(page, url) -> dict:
                   evidence="No semantic landmarks and no h1 — extractors cannot tell content from chrome")
 
 
+# A content hash, a UUID or a bare row id is an ASSET FINGERPRINT, not a fact. Every modern build
+# pipeline emits them, so "the filename contains a digit" matched essentially every fingerprinted
+# asset on the modern web: on dev.to it flagged 79 of 108 images, 59 of them 18x18 reaction icons
+# named `exploding-head-daceb38d....svg`, and reported that the site's facts were locked in pictures.
+_HASHY_RE = re.compile(r"[0-9a-f]{12,}", re.IGNORECASE)
+_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
+_ENCODED_RE = re.compile(r"%[0-9a-f]{2}", re.IGNORECASE)
+_SHORT_NUMBER_RE = re.compile(r"(?<![0-9a-fA-F])\d{1,4}(?![0-9a-fA-F])")
+_WORDY_RE = re.compile(r"[A-Za-z]{3,}")
+
+
+def looks_like_data_filename(filename: str) -> bool:
+    """Does this filename suggest an image carrying a FACT — a chart, a table, a figure?
+
+    A data image is named for what it shows: `revenue-2024.png`, `q3-results-chart.svg`. It has a
+    short, human-meaningful number next to real words. A build fingerprint has neither.
+    """
+    if not filename or _ENCODED_RE.search(filename):
+        return False                      # a proxied or URL-encoded asset path is opaque to us
+    stem = filename.rsplit(".", 1)[0]
+    if not stem or stem.isdigit():
+        return False                      # a bare row id
+    if _UUID_RE.search(stem) or _HASHY_RE.search(stem):
+        return False                      # a content hash
+    return bool(_SHORT_NUMBER_RE.search(stem)) and bool(_WORDY_RE.search(stem))
+
+
+def _dimension(img, attribute: str):
+    raw = (img.get(attribute) or "").strip().rstrip("px")
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_ui_sized(img, minimum_px: int) -> bool:
+    """True when the page itself declares the image too small to hold readable information."""
+    width, height = _dimension(img, "width"), _dimension(img, "height")
+    if width is None and height is None:
+        return False                      # undeclared: judge it on its filename instead
+    return any(value is not None and value < minimum_px for value in (width, height))
+
+
 def check_facts_not_image_only(page, url, thresholds) -> dict:
     """Flag images that appear to carry factual content with no text equivalent.
 
@@ -394,17 +438,28 @@ def check_facts_not_image_only(page, url, thresholds) -> dict:
                       measurement=len(images), page_url=url,
                       reason=f"only {len(images)} images; below the {minimum} needed to judge")
 
-    suspicious = []
+    minimum_px = int(thresholds.get("min_fact_image_px", 64))
+    considered, suspicious = [], []
     for img in images:
         alt = (img.get("alt") or "").strip()
-        src = (img.get("src") or "")
+        src = img.get("src") or ""
         filename = urlparse(src).path.rsplit("/", 1)[-1]
-        looks_factual = bool(_DIGIT_RE.search(filename))
+        if _is_ui_sized(img, minimum_px):
+            continue                      # an 18x18 reaction icon holds no chart
+        considered.append(img)
         has_text_equivalent = len(alt) >= 10
-        if looks_factual and not has_text_equivalent:
+        if looks_like_data_filename(filename) and not has_text_equivalent:
             suspicious.append(filename or src)
 
-    ratio = len(suspicious) / len(images)
+    if len(considered) < minimum:
+        return result("extraction.facts_not_image_only", "not_applicable",
+                      measurement=f"{len(considered)}/{len(images)} images above {minimum_px}px",
+                      page_url=url,
+                      reason=f"only {len(considered)} images large enough to carry a fact; "
+                             f"below the {minimum} needed to judge")
+
+    ratio = len(suspicious) / len(considered)
+    images = considered
     cap = float(thresholds.get("max_image_only_fact_ratio", 0.5))
     measurement = f"{len(suspicious)}/{len(images)} images (ratio {ratio:.2f}, threshold {cap})"
 

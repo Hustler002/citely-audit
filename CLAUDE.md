@@ -111,6 +111,25 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
+- **A finding is reported at the strength of what was MEASURED** (added 2026-09-10). Severity came
+  straight from the registry, so a `partial` was announced at the same strength as a total failure.
+  dev.to was told twice, both `critical`, that its identity was undeclared: once for having no
+  JSON-LD, once for having only Open Graph — a partial that had already been awarded half credit.
+  A partial is now graded one tier below the declared severity, with `medium` as the floor because
+  there is no `low`. This is the answer to "double jeopardy" that does NOT reintroduce suppression:
+  measured, suppressing `organization_declared` on a `structured_data_present` failure costs 24
+  points of coverage to gain 5 of score, and reinstates the 2026-09-08 collateral damage.
+- **Above-the-fold text means text a visitor can read.** A TreeWalker over `SHOW_TEXT` returns the
+  contents of `<script>` and `<style>`, and those elements report `top = 0`, so inline JavaScript
+  read as the first thing on the page: 3,301 of dev.to's 6,214 reported characters were source
+  code, and the value-proposition check scored `if (navigator.userAgent === 'ForemWebView/1')`
+  instead of the site's hero copy. Non-rendering tags and nodes with no layout box are excluded.
+- **A build fingerprint is not a fact.** `extraction.facts_not_image_only` treated any digit in a
+  filename as evidence of a chart. Every modern bundler fingerprints assets, so that matched almost
+  everything: 79 of 108 images on dev.to, 59 of them 18x18 reaction icons named
+  `exploding-head-daceb38d....svg`. Content hashes, UUIDs, bare row ids and URL-encoded proxy paths
+  are now excluded, a data filename must pair a short number with real words, and images the page
+  itself declares smaller than `min_fact_image_px` are not considered at all.
 - **Entity signals are graded by CARRIER STRENGTH and detected STRUCTURALLY** (added 2026-09-10).
   Three rules, each replacing a fixed list that only fitted the sites we had tested.
   (1) *Identity is a shape, not a type name.* schema.org has ~200 LocalBusiness subtypes, so a
@@ -180,7 +199,7 @@ Built on the 5 failure mechanics: (1) crawl/render/extraction funnel, (2) RAG qu
 
 ## Current status: PHASE 6 COMPLETE — **the audit runs end-to-end and emits a real report**
 
-**821 tests, 13 skipped.** **Citely is now a working tool.** `run_audit.py` fetches, selects pages,
+**848 tests, 13 skipped.** **Citely is now a working tool.** `run_audit.py` fetches, selects pages,
 renders, runs all four analyzers as subprocesses, scores, and emits a schema-valid JSON report.
 
 Verified on real input:
@@ -680,3 +699,38 @@ Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`.
   page, a directory-listed clinic, and a Spanish bakery. They encode SHAPES, so a change that
   helps one site cannot silently break another — which was the explicit requirement.
   Test count 784 -> 821; `tests/test_entity_generalization.py` (37), all eight mutations caught.
+- 2026-09-10 — **Three measurement defects fixed; two reported root causes did not survive
+  checking** (from a dev.to audit returning five findings, three of them wrong).
+  **Verified each claim before acting on it, and two were mistaken.**
+    * *"`wait_until: load` snapshotted the page before React hydrated."* Measured:
+      `domcontentloaded`, `load` and `networkidle` return a **byte-identical 263,269-character
+      DOM** on dev.to, which is server-rendered Rails, not a hydrated SPA. The wait strategy was
+      not involved. The hydrating-SPA fixture confirms the settle window still catches real
+      hydration, so nothing was changed there.
+    * *"Implement dependency suppression so `organization_declared` is suppressed when
+      `structured_data_present` fails."* Measured: that costs **24 points of coverage to gain 5 of
+      score** (66.0 at 1.0 coverage becomes 71.1 at 0.76), and it reinstates exactly the collateral
+      damage removed on 2026-09-08, where one verified failure wiped 44% of the category. Not done.
+      The real defect was different and is fixed below.
+  **Three real defects, each found by measuring the page rather than reasoning about it:**
+    1. **Geometry counted `<script>` and `<style>` as page text**, because a `SHOW_TEXT` TreeWalker
+       returns their contents and they report `top = 0`. 3,301 of 6,214 above-the-fold characters
+       were JavaScript source, so `orientation.value_proposition` was handed inline script instead
+       of the hero copy and failed at `high`. Nodes with no layout box were counted for the same
+       reason. Now excluded; dev.to's above-fold text drops 6,214 -> 2,913, all of it real copy.
+    2. **"A digit in the filename" meant "this image carries a fact."** Asset fingerprinting makes
+       that match nearly every modern site: 79 of 108 images on dev.to, 59 of them 18x18 reaction
+       icons. Note the reported cause — "counts every image without an alt tag" — was also not
+       right; the digit rule was. Fixed by excluding content hashes, UUIDs, bare ids and
+       URL-encoded proxy paths, requiring a short number beside real words, and skipping images the
+       page declares smaller than 64px. dev.to: 79/108 flagged -> 0/49, ai_discoverability 90 -> 100.
+    3. **Severity ignored state.** A `partial` was reported at the check's full declared severity,
+       which is what produced two `critical` findings for one root cause and reported a title two
+       characters under the floor at `high`. Partials are now demoted one tier.
+  **On the title threshold:** measured 11 real sites before touching it. Median length 50, and only
+  dev.to falls under the 15-character floor. Lowering the floor would be fitting the tool to one
+  site, which is the opposite of the standing instruction. The `partial` STATE was right; only the
+  `high` severity was wrong, and demotion fixes it to `medium`.
+  dev.to: 82 -> **87**, findings 5 -> 4, severity 2C/3H/0M -> 1C/1H/2M, all three false positives
+  gone. eff.org 80 -> 83, github.com 85 -> 88. Every fixture score unchanged.
+  Test count 821 -> 848; `tests/test_measurement_precision.py` (27), four mutations all caught.

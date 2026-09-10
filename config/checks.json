@@ -141,7 +141,9 @@
       "requires_language": false,
       "threshold": {
         "max_image_only_fact_ratio": 0.5,
-        "min_images_to_evaluate": 3
+        "min_images_to_evaluate": 3,
+        "min_fact_image_px": 64,
+        "_note": "An image smaller than min_fact_image_px cannot hold a readable fact, and a filename that is a build fingerprint (content hash, UUID, bare row id, URL-encoded path) is not evidence of one. Matching any digit flagged 79 of 108 images on dev.to, 59 of them 18x18 reaction icons."
       },
       "title": "Key facts are not locked inside images",
       "signal": "Ratio of images carrying apparent factual content (numbers, claims) with no equivalent text or alt",

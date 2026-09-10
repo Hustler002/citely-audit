@@ -128,7 +128,15 @@ GEOMETRY_JS = """
   } catch (e) {}
 
   // Text that actually renders within the first viewport.
+  //
+  // A TreeWalker over SHOW_TEXT returns the CONTENTS of <script> and <style> too, and those
+  // elements report top = 0, so inline JavaScript was being counted as the first thing a visitor
+  // reads. On dev.to that was 3,301 of 6,214 reported characters, and the value-proposition check
+  // was handed `if (navigator.userAgent === 'ForemWebView/1')` in place of the page's own hero
+  // copy. Elements with no layout box report top = 0 for the same reason, so a hidden dropdown
+  // also read as above-the-fold content.
   try {
+    const SKIP = /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|HEAD|TITLE|META|LINK)$/;
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let total = 0, seen = 0;
     const parts = [];
@@ -138,9 +146,12 @@ GEOMETRY_JS = """
       const value = (node.nodeValue || '').trim();
       if (!value) continue;
       const parent = node.parentElement;
-      if (!parent) continue;
-      const t = topOf(parent);
-      if (t !== null && t < window.innerHeight) {
+      if (!parent || SKIP.test(parent.tagName)) continue;
+      let rect = null;
+      try { rect = parent.getBoundingClientRect(); } catch (e) { continue; }
+      if (!rect || (rect.width === 0 && rect.height === 0)) continue;   // not laid out
+      const t = Math.round(rect.top + window.scrollY);
+      if (t < window.innerHeight) {
         total += value.length;
         if (parts.length < 200) parts.push(value);
       }

@@ -258,9 +258,11 @@ def build_findings(resolved: dict, registry, config: dict, raw_registry: dict) -
             finding_title = meta.get("failure_title") or check.title
             finding_summary = meta.get("failure_summary") or check.plain_summary
 
+        severity = severity_for_state(check.severity, state.state)
+
         findings.append({
             "title": finding_title,
-            "severity": check.severity,
+            "severity": severity,
             "category": check.category,
             "check_id": check_id,
             "confidence": check.confidence_class,
@@ -275,10 +277,33 @@ def build_findings(resolved: dict, registry, config: dict, raw_registry: dict) -
             "points_recoverable": scoring.points_recoverable(check_id, resolved, registry, config),
             "suggested_action": {
                 "summary": meta.get("remediation") or check.plain_summary,
-                "priority": check.severity,
+                "priority": severity,
             },
         })
     return findings
+
+
+# Strict 3-tier, no `low` (locked). A partial is graded one tier down from the check's declared
+# severity, and `medium` is the floor.
+SEVERITY_ORDER = ("critical", "high", "medium")
+
+
+def severity_for_state(declared: str, state: str) -> str:
+    """A finding is reported at the strength of what was actually measured.
+
+    Severity used to come straight from the registry, so a PARTIAL was announced at the same
+    strength as a total failure. dev.to was told twice, in `critical`, that its identity was
+    undeclared: once for having no JSON-LD at all, and once for having only Open Graph — which is
+    a partial that had already been awarded half credit. Two criticals for one root cause, and one
+    of them describing something the site does have. Likewise a 13-character title, two characters
+    under the floor, was reported at `high` alongside genuinely blocking problems.
+
+    Demoting partials keeps the severity histogram honest without touching the score, and without
+    suppressing the finding: the gap is still reported, at a strength that matches it.
+    """
+    if state != scoring.PARTIAL or declared not in SEVERITY_ORDER:
+        return declared
+    return SEVERITY_ORDER[min(SEVERITY_ORDER.index(declared) + 1, len(SEVERITY_ORDER) - 1)]
 
 
 def _partial_reason(artifact: dict, resolved: dict, errors: list) -> tuple:
