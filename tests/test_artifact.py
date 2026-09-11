@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -396,12 +397,80 @@ def test_compression_bomb_refused_against_live_server(config, server):
     assert result.error_kind == "too_large"
 
 
-def test_deadline_marks_later_pages_skipped(config, server):
-    import time
+class SteppedClock:
+    """A clock the test advances on purpose, instead of hoping the real one cooperates.
+
+    Only `_artifact` sees this — it is installed as that module's `time` attribute, so
+    `_safe_fetch` keeps the real clock and the fixture-server fetches get their full real budget.
+    That separation is the point: the deadline must be live during acquisition and expired by the
+    time the page loop runs, and nothing about real elapsed time can be relied on to arrange that.
+    """
+
+    def __init__(self):
+        self.offset = 0.0
+
+    def monotonic(self):
+        return time.monotonic() + self.offset
+
+    def sleep(self, seconds):
+        time.sleep(seconds)
+
+
+def test_deadline_marks_later_pages_skipped(config, server, monkeypatch):
+    """Pages after the homepage are skipped once the global deadline has passed.
+
+    This test used to pass `deadline=time.monotonic() + 0.001` and accept either a skipped page OR
+    a single-page artifact. It failed roughly one run in six, and the cause was not CPU load:
+    **`time.monotonic()` on Windows is `GetTickCount64()` with a resolution of 15.625 ms**, so a
+    1 ms deadline is smaller than the clock can represent. Whether it had "expired" by the time the
+    page loop ran depended entirely on whether a tick boundary happened to fall during the crawl —
+    a coin toss, not a timing margin. The `or len(pages) == 1` escape hatch then hid the other half
+    of the problem, because a run where acquisition itself died on the deadline also counted as a
+    pass while proving nothing about skipping.
+
+    The clock is now driven explicitly: acquisition runs with 30 real seconds of budget, and the
+    deadline is pushed into the past the instant page selection returns. The loop check is
+    therefore expired on every iteration, on every machine, regardless of speed or load.
+
+    `timing.total_ms` in the resulting artifact is synthetic — it includes the jump — which is
+    irrelevant here and asserted nowhere.
+    """
+    clock = SteppedClock()
+    monkeypatch.setattr(A, "time", clock)
+
+    real_select = A.PS.select_pages
+
+    def select_then_expire_the_budget(*args, **kwargs):
+        candidates = real_select(*args, **kwargs)
+        clock.offset = 31.0          # strictly greater than the 30 s budget below
+        return candidates
+
+    monkeypatch.setattr(A.PS, "select_pages", select_then_expire_the_budget)
+
     artifact = A.build_artifact(f"{server}/", config, force_tier=R.TIER_B,
-                                deadline=time.monotonic() + 0.001)
-    statuses = [p["status"] for p in artifact["pages"]]
-    assert "skipped" in statuses or len(artifact["pages"]) == 1
+                                deadline=time.monotonic() + 30.0)
+
+    pages = artifact["pages"]
+    # No escape hatch: if the fixture server ever stops offering a second page, this test has
+    # nothing to measure and must say so rather than passing silently.
+    assert len(pages) >= 2, f"expected more than one candidate page, got {pages}"
+    assert pages[0]["status"] == "ok", "acquisition must succeed; only the LATER pages are skipped"
+
+    skipped = [p for p in pages[1:] if p["status"] == "skipped"]
+    assert skipped, f"no page was skipped despite an expired budget: {pages}"
+    assert all(p["skip_reason"] == "budget" for p in skipped)
+
+
+def test_pages_are_not_skipped_while_the_budget_is_intact(config, server):
+    """The control for the test above.
+
+    Without it, a skip caused by something other than the deadline — a broken fixture page, a
+    refused fetch — would still satisfy the assertions and the budget logic would go unmeasured.
+    """
+    artifact = A.build_artifact(f"{server}/", config, force_tier=R.TIER_B,
+                                deadline=time.monotonic() + 300.0)
+    assert len(artifact["pages"]) >= 2
+    assert not [p for p in artifact["pages"] if p["status"] == "skipped"]
 
 
 # --- Post-Phase-3 cleanup regressions ------------------------------------------------------------

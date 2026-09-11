@@ -163,6 +163,13 @@ PowerShell terminal needs none of this.**
   finding" for detectors that had nothing to say — on four of five real sites sampled — so the
   diagnostics asserted a redundancy that was never established. `suppressed` now means exactly one
   thing: this had something to report and it was withheld.
+- **Never express a deadline in a unit the clock cannot represent** (added 2026-09-11).
+  `time.monotonic()` on Windows is `GetTickCount64()` with a resolution of **15.625 ms**, so a test
+  passing `deadline = monotonic() + 0.001` was asking whether a sub-tick interval had elapsed. It
+  had no answer: the result depended on whether a tick boundary happened to fall during the crawl,
+  which failed about one run in six. A deadline test drives the clock explicitly instead — the real
+  one is installed only in `_artifact`, so `_safe_fetch` keeps full real budget for the fixture
+  fetches while the page loop sees an expired deadline on every iteration.
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
@@ -254,7 +261,7 @@ PowerShell terminal needs none of this.**
 
 ## Current status: PHASE 7 COMPLETE — **every finding now ships with a fix and a way to check it**
 
-**922 tests, 13 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**923 tests, 13 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -574,7 +581,7 @@ below runs from the repo root with the virtual environment **activated**.
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 922 passed, 13 skipped
+pytest -q                                                                                  # 923 passed, 13 skipped
 for s in skills/*/; do skills-ref validate "$s"; done                                      # Phase 10, not installed yet
 ```
 
@@ -989,3 +996,29 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   behaved: wikipedia.org and djangoproject.com each emit one proactive item, developer.mozilla.org
   correctly emits none. `sample-report.json` regenerated with score, coverage and findings
   byte-identical.
+- 2026-09-11 — **Removed the one flaky test in the suite** (`test_deadline_marks_later_pages_skipped`),
+  ahead of relying on this suite in CI. It failed roughly one run in six.
+  **The cause was not CPU load, which is what it looked like.** `time.monotonic()` on Windows is
+  `GetTickCount64()` with a resolution of **15.625 ms**, and the test set its deadline 1 ms in the
+  future — an interval the clock cannot represent at all. Whether the budget had "expired" by the
+  time the page loop ran came down to whether a 15.6 ms tick boundary happened to fall during the
+  crawl. Confirmed by reading `time.get_clock_info('monotonic')` rather than inferring it, and by
+  looping the real call 60 times in-process: 26 runs produced `('ok','ok','ok')` with nothing
+  skipped, against 13 `('ok','skipped','skipped')` and 14 where acquisition itself died on the
+  deadline.
+  **The assertion was also hiding half the problem.** `assert "skipped" in statuses or
+  len(pages) == 1` meant a run where the homepage fetch itself failed on the deadline counted as a
+  pass while proving nothing about skipping — so the test could not distinguish "budget skipping
+  works" from "acquisition collapsed".
+  **Fixed by driving the clock, not by widening the margin.** A `SteppedClock` is installed as
+  `_artifact`'s `time` attribute only, so `_safe_fetch` keeps the real clock and the fixture-server
+  fetches get a full 30 real seconds; the offset jumps to 31 s the moment `select_pages` returns,
+  which is immediately before the page loop. The loop-top check is therefore expired on every
+  iteration on every machine, independent of speed, load and clock resolution. The escape hatch is
+  gone: the test now asserts more than one candidate page, a successful homepage, and at least one
+  later page skipped with `skip_reason == "budget"`.
+  Added `test_pages_are_not_skipped_while_the_budget_is_intact` as the control, so a skip caused by
+  anything other than the deadline cannot satisfy the first test.
+  Verified: 15/15 clean runs of the file, then 10/10 with ten CPU-saturating processes running
+  alongside. Three mutations — skipping disabled, deadline never expired, everything skipped
+  regardless of budget — all caught. Test count 922 → **923**.
