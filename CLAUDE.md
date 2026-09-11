@@ -285,9 +285,9 @@ PowerShell terminal needs none of this.**
 - Base spec has **no** `marketplace.json` / `entrypoint` concept — bespoke to this brief.
 - Official validator: `skills-ref validate ./<skill>` (github.com/agentskills/agentskills).
 
-## Current status: PHASE 9 COMPLETE — **precision and recall are measured, not asserted**
+## Current status: ALL TEN PHASES COMPLETE — **compliance signed off mechanically**
 
-**983 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**1024 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -355,7 +355,7 @@ Run it:
 ```
 stdout is the report and nothing else; logs go to stderr. `--ci` exits 1 on any critical finding.
 
-Still to come: compliance sign-off (Phase 10).
+All ten phases are complete. Remaining work is optional and unscored: `render_html.py`, `checks-reference.md`, the User-Agent contact URL, and browser reuse across pages.
 
 ### Implementation phases
 | Phase | Scope | Status |
@@ -369,7 +369,7 @@ Still to come: compliance sign-off (Phase 10).
 | 7 | `remediation-advisor` (6th skill) + proactive suggestions | ✅ **DONE** |
 | 8 | Non-expert output layer (JSON) — SPA headline problem fixed. `render_html.py` **deferred, unscored** | ✅ **DONE** |
 | 9 | `labeled_corpus.json` + precision/recall + archetype fixtures | ✅ **DONE** |
-| 10 | Compliance & sign-off (`skills-ref validate`, README) | next |
+| 10 | Compliance & sign-off (`agentskills validate`, README) | ✅ **DONE** |
 
 ### Done
 - [x] Full scaffold: manifest, 2 JSON Schemas, config, 5 `SKILL.md`, script skeletons, fixtures, tests.
@@ -651,6 +651,36 @@ Result: `ecommerce` 94 → 100, the locksmith 87 → 93, `example.com` correctly
 other fixture unchanged, and all 454 analyzer tests still pass including the Phase-5 anti-gaming
 tests.
 
+### Phase 10 delivered — every sign-off gate is now a test
+
+A sign-off written into a document decays the moment the code moves, so each gate from PLAN.md's
+Verification section is asserted mechanically in `tests/test_compliance.py` (43).
+
+| Gate | How it is enforced |
+|---|---|
+| All six skills `agentskills.io`-compliant | The **reference validator** runs on each folder, AND the same rules are asserted natively — name present, valid charset, ≤64 chars, equals the folder name, body under 500 lines, description substantial enough to select on |
+| Manifest well-formed, exactly one entrypoint | Declared ids match the folders on disk in BOTH directions; every path is relative, local and inside the marketplace |
+| Report meets the brief's mandated floor | Required keys, the severity enum, and `total == critical + high + medium` |
+| Recommend-only, read-only | Source scan: no state-changing HTTP verb in any non-orchestrator skill |
+| Only the orchestrator touches the network | Source scan: no network import outside the entrypoint |
+| Legacy project name gone from code | Whole-tree scan, prose documents excepted |
+| README describes each skill and the composition | Every manifest id present, composition and entrypoint described, no shipped phase advertised as pending, and the documented validator command is the one that exists |
+| Determinism, corpus, injection resistance | Already enforced in `test_corpus.py` from Phase 9 |
+| Under the 5-minute budget | Measured live: `python.org` **41s**, `djangoproject.com` **31s**, both five-page audits |
+
+**The validator is pinned** (`skills-ref==0.1.1`, exposing the `agentskills` command) in the dev
+extra rather than left to chance. The brief calls it "a convenience, not required", but skill-format
+hygiene is scored, so it runs in CI — and its rules are duplicated natively so the guarantee outlives
+the tool.
+
+Two things the phase found rather than assumed:
+- **The README documented `skills-ref validate`, a command that does not exist.** The installed entry
+  point is `agentskills`. A setup instruction that does not run is worse than none, because it is
+  trusted. Now asserted.
+- **The compliance scan reported itself.** The legacy-name guard matched its own source, because the
+  test necessarily contains the string it searches for. The needle is now assembled at runtime; an
+  exclusion list would have been worse, since it would hide a genuine hit in that file.
+
 ### Not yet done — implementation order (PLAN.md §14)
 - [x] ~~**2.** `_safe_fetch.py` + security corpus.~~ **DONE**
 - [ ] **3.** Artifact assembly, `_page_select.py` (sitemap → homepage fallback), `_render.py` (Tier A/B);
@@ -663,7 +693,7 @@ tests.
       brief grades the emitted schema. `render_html.py` deferred: the brief never mentions HTML and no
       rubric row scores it. The SPA headline acceptance criterion is met and asserted.
 - [x] ~~**9.** `labeled_corpus.json` + precision/recall harness; archetype fixtures.~~ **DONE**
-- [ ] **10.** `skills-ref validate` all 6 skills; README refresh; determinism + read-only sign-off.
+- [x] ~~**10.** validate all 6 skills; README refresh; determinism + read-only sign-off.~~ **DONE**
 
 ### Structural deltas from the current scaffold (v3 requires)
 - **Add** `config/checks.json` (check registry) — does not yet exist.
@@ -691,7 +721,7 @@ python tests/run_precision_recall.py                                            
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 983 passed, 0 skipped
+pytest -q                                                                                  # 1024 passed, 0 skipped
 for s in skills/*/; do skills-ref validate "$s"; done                                      # Phase 10, not installed yet
 ```
 
@@ -1224,3 +1254,29 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   the committed sample report is now checked against a fresh run — it had been regenerated by hand
   every phase, which is exactly the step that goes stale — two audits of one input are asserted
   byte-identical, and the broken page must score materially below the healthy one.
+- 2026-09-11 — **Phase 10 complete. All ten phases done; 983 → 1024 tests, 0 skipped.**
+  Every gate in PLAN.md's Verification section is now a test rather than a paragraph. All six skills
+  pass the **agentskills.io reference validator**, which is pinned as `skills-ref==0.1.1` in the dev
+  extra so CI runs it; the same rules are also asserted natively, so the guarantee survives the tool
+  changing or going away. Live budget measured rather than claimed: `python.org` 41s and
+  `djangoproject.com` 31s, both five-page audits, against a 5-minute limit.
+  **README rewritten reviewer-first.** The brief requires a root README "describing what each skill
+  does and how the entrypoint composes them", and ours listed the skills but never explained the
+  composition. It now opens with a marketplace-composition table and a seven-step flow from safe
+  fetch through the artifact, the four network-free analyzers, scoring, and the score-neutral
+  advisor, to one JSON report on stdout. The existing setup, security, rendering and testing material
+  is kept below it.
+  **Two defects found by doing the work rather than assuming it was fine:**
+    1. The README documented `skills-ref validate`. The installed command is `agentskills`. It had
+       been wrong since Phase 1 and nothing caught it, because no test had ever run the command the
+       docs told a reviewer to run. Now asserted.
+    2. The legacy-name compliance scan **reported itself** — a guard that searches for a string
+       necessarily contains it. The needle is assembled at runtime rather than excluded by filename,
+       because an exclusion would hide a real hit if code were later added to that file.
+  **Consolidated two duplicated README drift tests** out of `test_remediation_advisor.py`. Phase 10's
+  replacements are strictly stronger: they check every skill by the `id` the manifest actually uses,
+  also require the composition and entrypoint to be described, and cover Phases 7, 8 and 9 rather
+  than Phase 7 alone. Two copies would have meant two places to update and one going stale, which is
+  the exact failure that pair existed to prevent.
+  Remaining work is optional and unscored: `render_html.py` (the brief never mentions HTML),
+  `checks-reference.md`, the User-Agent contact URL, and reusing one browser across pages.

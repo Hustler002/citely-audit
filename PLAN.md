@@ -536,7 +536,13 @@ design. **No engineering effort is spent here** — it is not in the rubric.
    blocked-page detection happens during acquisition, and the corpus audits local files.
    It earned its keep immediately by exposing the `orientation.value_proposition` word-list
    gate, which failed real value propositions while passing example.com — see §8.
-10. `skills-ref validate` all 6; README/CLAUDE.md; final determinism + read-only sign-off.
+10. ~~`skills-ref validate` all 6; README/CLAUDE.md; final determinism + read-only sign-off.~~
+    ✅ **PHASE 10 DONE (2026-09-11).** All six skills pass the reference validator, now pinned as
+    `skills-ref==0.1.1` in the dev extra (the command is `agentskills`, not `skills-ref` — the
+    docs had it wrong since Phase 1). Every gate in the Verification section below is asserted in
+    `tests/test_compliance.py` rather than checked by hand. README rewritten reviewer-first around
+    marketplace composition, as the brief requires. Budget measured live: python.org 41s,
+    djangoproject.com 31s. **All ten phases complete.**
 
 ---
 
@@ -605,7 +611,7 @@ pytest                                                       # detection, genera
 python tests/run_precision_recall.py                         # per-check precision/recall vs labeled corpus
 python skills/audit-orchestrator/scripts/run_audit.py --url http://127.0.0.1:8099/spa --html-out report.html
 python skills/audit-orchestrator/scripts/run_audit.py --url http://127.0.0.1:8099/non-english   # i18n gating
-for s in skills/*/; do skills-ref validate "$s"; done
+for s in skills/*/; do agentskills validate "$s"; done
 ```
 
 Sign-off gates: all 6 skills pass `skills-ref validate` · report validates against schema **and** the

@@ -651,24 +651,12 @@ def test_the_manifest_matches_the_shape_the_brief_documents():
     assert sum(1 for s in manifest["skills"] if s.get("entrypoint")) == 1
 
 
-def test_the_readme_lists_every_skill_in_the_manifest():
-    """The README is what a reviewer reads first, and it went stale the moment a sixth skill landed.
-
-    It claimed five skills while `marketplace.json` declared six, and still announced the advisor as
-    "still to come" after it shipped. Marketplace composition is a scored criterion, so a README
-    that undercounts the marketplace is not a cosmetic problem. Asserted rather than remembered.
-    """
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    manifest = load(REPO_ROOT / "marketplace.json")
-    missing = [s["path"] for s in manifest["skills"] if f'`{s["path"]}/`' not in readme]
-    assert not missing, f"README does not list: {missing}"
-
-
-def test_the_readme_does_not_still_promise_a_shipped_phase():
-    shipped = (REPO_ROOT / "skills" / "remediation-advisor").exists()
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8").lower()
-    if shipped:
-        assert "(phase 7)" not in readme, "README still lists Phase 7 as pending"
+# The two README drift tests that used to live here moved to tests/test_compliance.py in Phase 10,
+# which is where marketplace and README compliance belongs. The replacements are strictly stronger:
+# they check every skill by the `id` the manifest actually uses rather than by a path table the
+# README no longer has, they also require the composition and the entrypoint to be described, and
+# they cover Phases 7, 8 and 9 rather than Phase 7 alone. Keeping both copies would have meant two
+# places to update and one of them going stale — which is the failure this pair existed to prevent.
 
 
 def test_the_skill_name_matches_its_folder():

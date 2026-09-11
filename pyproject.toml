@@ -18,6 +18,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest==8.3.3",
+    # The agentskills.io reference validator, exposed as the `agentskills` command. The brief calls
+    # it "a convenience, not required", but skill-format compliance is a scored criterion, so it is
+    # pinned here to make it run in CI rather than depend on someone remembering. Its rules are ALSO
+    # asserted natively in tests/test_compliance.py, so the guarantee survives the tool changing.
+    "skills-ref==0.1.1",
 ]
 
 # This project intentionally ships NO importable Python package. Every skill is a
