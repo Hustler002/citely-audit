@@ -414,7 +414,11 @@ def build_corrective(findings, templates: dict, values: dict) -> list:
             continue
         snippet, remaining = fill(entry.get("snippet"), values)
         validation, validation_remaining = fill(entry.get("validation"), values)
-        row = {"finding_id": finding_id, "check_id": check_id,
+        # `target` answers "where do I make this change". It is always supplied, because about half
+        # of all findings are an ABSENCE with no element to point at: a missing meta tag has no
+        # selector, and "in <head>" is the only address that exists. The analyzer's `selector` still
+        # names the exact element when there is one — the two are complementary.
+        row = {"finding_id": finding_id, "check_id": check_id, "target": entry.get("target"),
                "snippet": snippet, "validation": validation}
         merged = remaining + [p for p in validation_remaining if p not in remaining]
         if merged:

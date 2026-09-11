@@ -824,5 +824,109 @@
       "failure_title": "Body text is too small",
       "failure_summary": "Your body text is smaller than is comfortable to read."
     }
-  ]
+  ],
+  "categories": {
+    "_note": "Plain-language verdicts for PLAN.md §9 layer 1 — one sentence per category, chosen by score band, with no undefined jargon. They live here because report wording lives ONCE in this file and is applied by the orchestrator, which is what stops it drifting. A band is selected by the FIRST entry whose `min` the score meets, so bands are ordered high to low. `unmeasured` is used when the category has no score at all, or when its coverage is below the floor — a sentence about a score built on a minority of the evidence would read as a verdict on the site, which it is not.",
+    "ai_discoverability": {
+      "label": "Getting found and read",
+      "question": "Can an AI assistant reach your page and read what is on it?",
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "AI assistants can reach your page and read what is on it."
+        },
+        {
+          "min": 50,
+          "verdict": "AI assistants can reach your page, but part of what it says is hard for them to read."
+        },
+        {
+          "min": 0,
+          "verdict": "AI assistants cannot reliably read your page, so your facts may never reach them."
+        }
+      ],
+      "unmeasured": "We could not check whether AI assistants can read your page."
+    },
+    "ai_comprehension": {
+      "label": "Being understood and quoted",
+      "question": "Can an assistant lift a clear fact out of your page and quote it?",
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "Your page states its facts clearly enough to be quoted."
+        },
+        {
+          "min": 50,
+          "verdict": "Your page can be read, but its key facts are hard to lift out and quote."
+        },
+        {
+          "min": 0,
+          "verdict": "Your page does not state its facts in a form an assistant can quote."
+        }
+      ],
+      "unmeasured": "We could not check how quotable your page's facts are."
+    },
+    "entity_trust": {
+      "label": "Being recognised as you",
+      "question": "Can a machine tell which business this is, and confirm it somewhere else?",
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "Your page says clearly who you are and points to other places that confirm it."
+        },
+        {
+          "min": 50,
+          "verdict": "Your page gives some sense of who you are, but not enough to tell you apart from a similarly named business."
+        },
+        {
+          "min": 0,
+          "verdict": "Nothing on your page tells a machine which business this is."
+        }
+      ],
+      "unmeasured": "We could not check whether your page says who you are."
+    },
+    "human_orientation": {
+      "label": "Keeping the visitor",
+      "question": "Can someone arriving from an AI answer tell they are in the right place?",
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "A visitor arriving from an AI answer can immediately tell what you do."
+        },
+        {
+          "min": 50,
+          "verdict": "A visitor arriving from an AI answer has to work to tell what you do."
+        },
+        {
+          "min": 0,
+          "verdict": "A visitor arriving from an AI answer cannot tell what you do, and is likely to leave."
+        }
+      ],
+      "unmeasured": "We could not check what a visitor sees when they arrive."
+    },
+    "overall": {
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "Your site is in good shape for AI assistants to find, read and cite."
+        },
+        {
+          "min": 50,
+          "verdict": "AI assistants can work with your site, but several things are holding back how often it gets cited."
+        },
+        {
+          "min": 0,
+          "verdict": "AI assistants will struggle to find, read or cite your site."
+        }
+      ],
+      "unmeasured": "We could not measure enough of your site to give it a score.",
+      "low_coverage_caveat": "This score comes from fewer than half of the checks, because most of the page could not be measured. Treat it as provisional and read what could not be checked before acting on the number."
+    },
+    "reasons": {
+      "_note": "Plain-language translations of the scoring engine's reason codes, for §9 layers 1 and 2 where undefined jargon is not allowed. 'suppressed_by_failed_prerequisite' is accurate and means nothing to a reader, so where a blocking check is known the report names THAT instead, in its own words.",
+      "suppressed_by_failed_prerequisite": "these checks could not be judged until something they depend on is fixed first",
+      "language_unsupported_or_undetected": "the page's language could not be confirmed, so checks that read wording were skipped rather than guessed",
+      "not_measured": "no result came back for these checks",
+      "blocked_before_fetch": "the page could not be fetched, so nothing on it could be measured"
+    }
+  }
 }

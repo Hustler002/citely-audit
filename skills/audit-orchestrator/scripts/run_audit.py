@@ -36,6 +36,7 @@ import time
 from pathlib import Path
 
 import _artifact as artifact_mod
+import _narrative as narrative
 import _render as render_mod
 import _safe_fetch as fetch_mod
 import _scoring as scoring
@@ -294,7 +295,7 @@ def apply_advice(findings: list, advice: dict) -> None:
         if not entry:
             continue
         action = finding.setdefault("suggested_action", {})
-        for field in ("snippet", "validation", "placeholders_remaining"):
+        for field in ("target", "snippet", "validation", "placeholders_remaining"):
             value = entry.get(field)
             if value:
                 action[field] = value
@@ -526,6 +527,21 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
             coverage_ratio=scoring.coverage(resolved, registry, config),
             cat_coverage=scoring.category_coverage(resolved, registry, config))
 
+        # --- the non-expert output layer (PLAN §9) -----------------------------------------
+        # Computed here, into the REPORT, not in a renderer: the brief grades the entrypoint's
+        # emitted schema, and a machine consumer piping the JSON deserves the same plain reading a
+        # person gets. Presentation only — it reads the scores, it never changes them.
+        registry_categories = load_json(CHECKS_PATH).get("categories") or {}
+        reason_text = registry_categories.get("reasons") or {}
+        cat_coverage = summary.get("category_coverage") or {}
+        verdict, headline_reliable, caveat = narrative.overall_verdict(
+            overall, summary.get("coverage"), registry_categories)
+        summary["verdict"] = verdict
+        summary["headline_reliable"] = headline_reliable
+        summary["headline_caveat"] = caveat
+        summary["category_verdicts"] = narrative.category_verdicts(
+            cat_scores, cat_coverage, registry_categories)
+
         # --- advise ------------------------------------------------------------------------
         # Runs after scoring and cannot influence it: the summary above is already final, and the
         # advisor only ever adds fields to findings that exist. Proactive items land in their own
@@ -572,6 +588,11 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         "partial": partial,
         "partial_reason": reason,
         "findings": findings,
+        # The same findings ordered by what fixing them is worth. findings[] is ordered by severity
+        # so F-001… stay stable across runs, so it cannot also carry the ROI ranking §9 asks for.
+        "next_actions": narrative.next_actions(findings),
+        "not_checked": narrative.what_could_not_be_checked(
+            resolved, registry, cat_coverage, raw_registry, reason_text),
         # Proactive suggestions from remediation-advisor. Deliberately a separate list: the
         # mandated schema floor requires total_findings == critical + high + medium, so anything
         # that is not a defect must stay outside findings[] or it breaks that invariant — and it

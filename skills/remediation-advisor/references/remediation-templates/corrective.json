@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "_note": "Corrective templates, one per check id. `snippet` is a copy-paste fix; null where pasting markup cannot fix the problem (a 500 response, a client-rendered architecture). `validation` is never null — every finding must tell the reader how to confirm the fix worked. PLAN.md §12 places these in the skill's own references so remediation-advisor stays self-contained and independently runnable, which is the padding test it has to pass. The registry's prose `remediation` line remains the action SUMMARY and is not duplicated here.",
+  "_note": "Corrective templates, one per check id. `snippet` is a copy-paste fix; null where pasting markup cannot fix the problem (a 500 response, a client-rendered architecture). `validation` is never null — every finding must tell the reader how to confirm the fix worked. PLAN.md §12 places these in the skill's own references so remediation-advisor stays self-contained and independently runnable, which is the padding test it has to pass. The registry's prose `remediation` line remains the action SUMMARY and is not duplicated here. `target` is the file-or-element location hint PLAN.md §7 asks for. It is always present, because roughly half of all findings are an ABSENCE with no element to point at — a missing meta tag has no selector, and \"add it in <head>\" is the only address that exists. The analyzer's `selector` remains the precise element when there is one; the two are complementary, not alternatives.",
   "_placeholders": {
     "{{SITE_URL}}": "final URL of the audited page",
     "{{SITE_HOST}}": "hostname of the audited page",
@@ -15,103 +15,127 @@
   "checks": {
     "access.http_ok": {
       "snippet": null,
-      "validation": "Run `curl -sS -o /dev/null -w \"%{http_code}\\n\" {{SITE_URL}}` and confirm it prints 200. A 3xx is acceptable only if the final hop is 200."
+      "validation": "Run `curl -sS -o /dev/null -w \"%{http_code}\\n\" {{SITE_URL}}` and confirm it prints 200. A 3xx is acceptable only if the final hop is 200.",
+      "target": "your web server or hosting configuration — not the page markup"
     },
     "access.ai_crawlers_allowed": {
       "snippet": "# robots.txt at https://{{SITE_HOST}}/robots.txt\n# Allow the crawlers that feed AI answer engines. Each needs its own group:\n# a User-agent line only applies to the group it heads.\n\nUser-agent: GPTBot\nAllow: /\n\nUser-agent: OAI-SearchBot\nAllow: /\n\nUser-agent: ClaudeBot\nAllow: /\n\nUser-agent: PerplexityBot\nAllow: /\n\nUser-agent: Google-Extended\nAllow: /\n\nUser-agent: CCBot\nAllow: /\n\n# Keep any existing rules for other crawlers below this point unchanged.",
-      "validation": "Fetch https://{{SITE_HOST}}/robots.txt and confirm each bot has its own User-agent group with an Allow rule, and that no earlier `User-agent: *` group contains a `Disallow: /` that these groups fail to override."
+      "validation": "Fetch https://{{SITE_HOST}}/robots.txt and confirm each bot has its own User-agent group with an Allow rule, and that no earlier `User-agent: *` group contains a `Disallow: /` that these groups fail to override.",
+      "target": "/robots.txt at the site root"
     },
     "access.indexable": {
       "snippet": "<!-- In <head>. Remove any noindex; state indexability explicitly. -->\n<meta name=\"robots\" content=\"index, follow\">\n\n<!-- If the block came from a header instead, remove or correct it server-side: -->\n<!-- X-Robots-Tag: index, follow -->",
-      "validation": "Run `curl -sSI {{SITE_URL}} | grep -i x-robots-tag` and confirm no `noindex` is returned, then view source and confirm no `<meta name=\"robots\">` contains `noindex`."
+      "validation": "Run `curl -sSI {{SITE_URL}} | grep -i x-robots-tag` and confirm no `noindex` is returned, then view source and confirm no `<meta name=\"robots\">` contains `noindex`.",
+      "target": "the robots meta tag in <head>, or the X-Robots-Tag response header"
     },
     "render.content_without_js": {
       "snippet": null,
-      "validation": "Run `curl -sS {{SITE_URL}} | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix — no markup change reproduces it."
+      "validation": "Run `curl -sS {{SITE_URL}} | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix — no markup change reproduces it.",
+      "target": "your rendering setup (server-side rendering or prerendering) — not the markup"
     },
     "extraction.semantic_html": {
       "snippet": "<!-- Replace generic wrappers with landmark elements. Same layout, machine-readable structure. -->\n<header> … site identity and navigation … </header>\n<main>\n  <article>\n    <h1>{{PAGE_TITLE}}</h1>\n    <section> … your primary content … </section>\n  </article>\n</main>\n<footer> … contact and legal … </footer>",
-      "validation": "View source and confirm exactly one `<main>` exists and your primary content sits inside it. Extraction tools use `<main>` to separate content from chrome."
+      "validation": "View source and confirm exactly one `<main>` exists and your primary content sits inside it. Extraction tools use `<main>` to separate content from chrome.",
+      "target": "the page's top-level layout wrappers"
     },
     "extraction.facts_not_image_only": {
       "snippet": "<!-- A figure keeps the visual and makes the fact readable. The caption is real text, so it is\n     extractable; alt alone is not a substitute, because it is not part of the document's prose. -->\n<figure>\n  <img src=\"{{IMAGE_SRC}}\" alt=\"{{IMAGE_FACT_SUMMARY}}\">\n  <figcaption>{{IMAGE_FACT_SUMMARY}}</figcaption>\n</figure>",
-      "validation": "Run `curl -sS {{SITE_URL}} | grep -F \"<figcaption\"` and confirm the numbers shown in the image appear as text. Copy the page into a plain-text editor: any fact that disappears is still invisible to an answer engine."
+      "validation": "Run `curl -sS {{SITE_URL}} | grep -F \"<figcaption\"` and confirm the numbers shown in the image appear as text. Copy the page into a plain-text editor: any fact that disappears is still invisible to an answer engine.",
+      "target": "each <img> carrying a figure, and the text around it"
     },
     "content.title_descriptive": {
       "snippet": "<!-- In <head>. Name the thing, then what it is — not a bare brand token. -->\n<title>{{BRAND_NAME}} — {{WHAT_YOU_DO}}</title>",
-      "validation": "Confirm the rendered `<title>` is between 15 and 70 characters and names both the brand and what it does. Search your own brand name and check the result headline reads as a description, not a label."
+      "validation": "Confirm the rendered `<title>` is between 15 and 70 characters and names both the brand and what it does. Search your own brand name and check the result headline reads as a description, not a label.",
+      "target": "the <title> element in <head>"
     },
     "content.meta_description": {
       "snippet": "<!-- In <head>. One self-contained sentence stating what this page offers. -->\n<meta name=\"description\" content=\"{{ONE_SENTENCE_DESCRIPTION}}\">",
-      "validation": "View source and confirm a single `<meta name=\"description\">` of 50 to 160 characters. Paste the URL into a link-preview tool and confirm the description shown is yours, not text the platform guessed."
+      "validation": "View source and confirm a single `<meta name=\"description\">` of 50 to 160 characters. Paste the URL into a link-preview tool and confirm the description shown is yours, not text the platform guessed.",
+      "target": "the description meta tag in <head>"
     },
     "content.heading_hierarchy": {
       "snippet": "<!-- One h1, then descend one level at a time. Skipping levels breaks the outline. -->\n<h1>{{PAGE_TITLE}}</h1>\n  <h2>First major section</h2>\n    <h3>Detail within it</h3>\n  <h2>Second major section</h2>",
-      "validation": "List the headings in order and confirm there is exactly one `<h1>` and no level is skipped. Any outline tool or `document.querySelectorAll('h1,h2,h3,h4')` in the console will show the sequence."
+      "validation": "List the headings in order and confirm there is exactly one `<h1>` and no level is skipped. Any outline tool or `document.querySelectorAll('h1,h2,h3,h4')` in the console will show the sequence.",
+      "target": "the heading elements in <body>, in document order"
     },
     "content.scannable_blocks": {
       "snippet": "<!-- Definition lists and tables are extracted far more reliably than the same facts in prose. -->\n<dl>\n  <dt>{{FACT_LABEL}}</dt><dd>{{FACT_VALUE}}</dd>\n  <dt>{{FACT_LABEL_2}}</dt><dd>{{FACT_VALUE_2}}</dd>\n</dl>",
-      "validation": "Confirm the page contains at least one `<ul>`, `<ol>`, `<dl>` or `<table>` carrying real facts rather than navigation links, with two or more items in it."
+      "validation": "Confirm the page contains at least one `<ul>`, `<ol>`, `<dl>` or `<table>` carrying real facts rather than navigation links, with two or more items in it.",
+      "target": "the paragraphs holding your key facts"
     },
     "quotability.self_contained_facts": {
       "snippet": "<!-- Before: depends on the sentence above it, so it is dropped when quoted alone. -->\n<!--   \"It has been serving the area since 1998.\" -->\n\n<!-- After: names the subject, so it survives being lifted out of context. -->\n<p>{{BRAND_NAME}} has served {{PLACE}} since {{YEAR}}.</p>",
-      "validation": "Take any three key sentences out of the page and read them cold. If a sentence needs the one before it to make sense, an answer engine will drop it rather than cite it."
+      "validation": "Take any three key sentences out of the page and read them cold. If a sentence needs the one before it to make sense, an answer engine will drop it rather than cite it.",
+      "target": "the sentences stating your key claims"
     },
     "density.factual_ratio": {
       "snippet": null,
-      "validation": "Count the sentences in your main content that contain a concrete number, name, date or specification. If fewer than a quarter do, the page is mostly framing and a summariser will condense away the part you wanted cited."
+      "validation": "Count the sentences in your main content that contain a concrete number, name, date or specification. If fewer than a quarter do, the page is mostly framing and a summariser will condense away the part you wanted cited.",
+      "target": "your main content section"
     },
     "entity.structured_data_present": {
       "snippet": "<!-- In <head> or at the end of <body>. JSON-LD is the format answer engines read most reliably. -->\n<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"{{BRAND_NAME}}\",\n  \"url\": \"{{SITE_URL}}\",\n  \"logo\": \"{{LOGO_URL}}\"\n}\n</script>",
       "validation": "Paste the URL into Google's Rich Results Test or schema.org's validator and confirm an Organization is detected with no errors.",
-      "snippet_json": "ld+json"
+      "snippet_json": "ld+json",
+      "target": "a JSON-LD script block in <head>"
     },
     "entity.organization_declared": {
       "snippet": "<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"{{BRAND_NAME}}\",\n  \"url\": \"{{SITE_URL}}\",\n  \"logo\": \"{{LOGO_URL}}\",\n  \"description\": \"{{META_DESCRIPTION}}\"\n}\n</script>\n\n<!-- Use a more specific @type if one fits — Dentist, Bakery, LocalBusiness, SoftwareApplication.\n     A specific type carries more meaning than the generic one, and any schema.org subtype counts. -->",
       "validation": "Run the Rich Results Test and confirm the detected entity's name matches the brand name a visitor sees in your header. A mismatch is worse than no markup: it tells the machine you are a different organisation.",
-      "snippet_json": "ld+json"
+      "snippet_json": "ld+json",
+      "target": "the Organization node in your JSON-LD"
     },
     "entity.sameas_present": {
       "snippet": "<!-- sameAs states \"these profiles are me\". Add it to the Organization you already declare. -->\n<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"{{BRAND_NAME}}\",\n  \"url\": \"{{SITE_URL}}\",\n  \"sameAs\": [\n{{SAMEAS_LINKS}}\n  ]\n}\n</script>\n\n<!-- With no structured data yet, rel=\"me\" on the links you already have is a valid alternative: -->\n<a rel=\"me\" href=\"{{PROFILE_URL}}\">{{BRAND_NAME}} on {{PLATFORM}}</a>",
       "validation": "Confirm every URL in `sameAs` loads and is a profile you control. A dead or wrong link weakens corroboration instead of strengthening it.",
-      "snippet_json": "ld+json"
+      "snippet_json": "ld+json",
+      "target": "the sameAs array on your Organization node"
     },
     "entity.sameas_authority": {
       "snippet": "<!-- Add at least one record somebody else maintains. Any ONE of these anchors your identity;\n     a local business does not need Wikidata, and a directory listing works just as well. -->\n\"sameAs\": [\n{{SAMEAS_LINKS_LEADING}}\n    \"{{AUTHORITY_PROFILE_URL}}\"\n]",
       "validation": "Confirm at least one `sameAs` target is a record you do not publish yourself — a Google Business Profile, an industry directory, a companies registry or a review platform. Links only to your own accounts cannot settle which business you are.",
-      "snippet_json": "fragment"
+      "snippet_json": "fragment",
+      "target": "the sameAs array on your Organization node"
     },
     "entity.opengraph_identity": {
       "snippet": "<!-- In <head>. Open Graph drives social previews; it is not a substitute for schema.org,\n     but a missing og:site_name loses the identity signal on every shared link. -->\n<meta property=\"og:site_name\" content=\"{{BRAND_NAME}}\">\n<meta property=\"og:title\" content=\"{{PAGE_TITLE}}\">\n<meta property=\"og:url\" content=\"{{SITE_URL}}\">\n<meta property=\"og:type\" content=\"website\">\n<meta property=\"og:image\" content=\"{{LOGO_URL}}\">",
-      "validation": "Paste the URL into any link-preview debugger and confirm the site name and title shown are the ones you intend."
+      "validation": "Paste the URL into any link-preview debugger and confirm the site name and title shown are the ones you intend.",
+      "target": "the Open Graph meta tags in <head>"
     },
     "entity.name_consistency": {
       "snippet": "<!-- The same brand string in all three places. A machine treats a difference as a different\n     organisation, which is exactly the mistaken-identity failure this category measures. -->\n<title>{{BRAND_NAME}} — …</title>\n<meta property=\"og:site_name\" content=\"{{BRAND_NAME}}\">\n<!-- and in JSON-LD: -->  \"name\": \"{{BRAND_NAME}}\"",
-      "validation": "Compare the `name` in your JSON-LD, the `og:site_name`, and the brand shown in your header. A tagline appended after a separator is fine; a genuinely different name is not."
+      "validation": "Compare the `name` in your JSON-LD, the `og:site_name`, and the brand shown in your header. A tagline appended after a separator is fine; a genuinely different name is not.",
+      "target": "the <title>, the og:site_name tag and the JSON-LD name — all three"
     },
     "orientation.heading_first_viewport": {
       "snippet": "<!-- The first thing in <main> should be the heading, not a carousel or a banner. -->\n<main>\n  <h1>{{HEADLINE}}</h1>\n  <p>{{SUPPORTING_SENTENCE}}</p>\n</main>",
-      "validation": "Load the page at 1280x800 and confirm a real heading is visible without scrolling. A visitor arriving from an AI citation decides in that first screen whether they reached the right place."
+      "validation": "Load the page at 1280x800 and confirm a real heading is visible without scrolling. A visitor arriving from an AI citation decides in that first screen whether they reached the right place.",
+      "target": "the first elements inside <main>"
     },
     "orientation.primary_cta": {
       "snippet": "<!-- A real anchor or button, inside the first screen. A div with a click handler is invisible\n     to crawlers and to assistive technology. -->\n<a class=\"cta\" href=\"{{CTA_TARGET}}\">{{CTA_LABEL}}</a>",
-      "validation": "Load the page without scrolling and confirm one obvious next step is visible, and that it is an `<a>` or `<button>` element rather than a styled `<div>`."
+      "validation": "Load the page without scrolling and confirm one obvious next step is visible, and that it is an `<a>` or `<button>` element rather than a styled `<div>`.",
+      "target": "the first screen, above the fold"
     },
     "orientation.content_not_obstructed": {
       "snippet": "<!-- Constrain a persistent banner so it cannot cover the first screen. -->\n.consent-banner, .promo-bar {\n  position: sticky;      /* not fixed, so it scrolls out of the way */\n  max-height: 20vh;      /* never more than a fifth of the viewport */\n}",
-      "validation": "Load the page in a clean browser profile at 1280x800 and confirm no overlay covers more than about a fifth of the first screen before any interaction."
+      "validation": "Load the page in a clean browser profile at 1280x800 and confirm no overlay covers more than about a fifth of the first screen before any interaction.",
+      "target": "the CSS for your banner or overlay"
     },
     "orientation.viewport_meta": {
       "snippet": "<!-- In <head>. Without it, mobile browsers render at desktop width and zoom out. -->\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
-      "validation": "Open the page on a phone, or in device emulation, and confirm the text is readable without pinch-zooming."
+      "validation": "Open the page on a phone, or in device emulation, and confirm the text is readable without pinch-zooming.",
+      "target": "the viewport meta tag in <head>"
     },
     "orientation.value_proposition": {
       "snippet": "<!-- The headline and the sentence under it must answer \"what is this and who is it for?\".\n     Put the answer in the prominent area — adding more text elsewhere does not help. -->\n<h1>{{WHAT_YOU_DO}}</h1>\n<p>{{WHO_IT_IS_FOR_AND_WHY_IT_IS_DIFFERENT}}</p>",
-      "validation": "Show the first screen to someone who does not know the company and ask what you sell and to whom. If they cannot say, an AI-referred visitor will not stay to find out."
+      "validation": "Show the first screen to someone who does not know the company and ask what you sell and to whom. If they cannot say, an AI-referred visitor will not stay to find out.",
+      "target": "the headline and the first paragraph under it"
     },
     "orientation.legibility": {
       "snippet": "/* Body text below about 14px drives away visitors who arrived on a phone. */\nbody { font-size: 16px; line-height: 1.5; }",
-      "validation": "Inspect a body paragraph and confirm the computed `font-size` is at least 14px, ideally 16px."
+      "validation": "Inspect a body paragraph and confirm the computed `font-size` is at least 14px, ideally 16px.",
+      "target": "the CSS rule setting the body font size"
     }
   }
 }

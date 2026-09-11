@@ -170,6 +170,23 @@ PowerShell terminal needs none of this.**
   which failed about one run in six. A deadline test drives the clock explicitly instead — the real
   one is installed only in `_artifact`, so `_safe_fetch` keeps full real budget for the fixture
   fetches while the page loop sees an expired deadline on every iteration.
+- **The plain-language layer lives in the REPORT, not in a renderer** (added 2026-09-11).
+  The brief grades the marketplace "not any single report it happens to produce", and asks whether
+  the entrypoint *is built to emit* something a non-expert could act on. So the verdict, the ranked
+  actions and the coverage caveat are fields in the emitted JSON. A machine consumer gets the same
+  plain reading a person does, and there is one wording rather than two that can disagree.
+- **A score built on a minority of the evidence is not a verdict on the site** (added 2026-09-11).
+  Below `COVERAGE_FLOOR` (0.5) `summary.headline_reliable` is false, the headline sentence says the
+  site could not be measured, and any category under the same floor says so too — even while its
+  NUMBER stays in `category_scores`, because deleting a measurement hides it. Chosen as a principle,
+  not fitted: under a half, most of the evidence is missing. It separates the two JavaScript shells
+  (0.175) from every real page measured, the thinnest being the German fixture at 0.698. This closes
+  the second half of open issue #10.
+- **Ranking is by what the fix is worth, never by how alarming it sounds** (added 2026-09-11).
+  `next_actions` sorts on `points_recoverable` first, severity only as a tie-break. The first test
+  of this passed with the points key deleted, because on that fixture severity order and gain order
+  coincided — the fourth false-pass this project has caught by mutation. It is now asserted on a
+  case where the two orderings disagree.
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
@@ -259,9 +276,9 @@ PowerShell terminal needs none of this.**
 - Base spec has **no** `marketplace.json` / `entrypoint` concept — bespoke to this brief.
 - Official validator: `skills-ref validate ./<skill>` (github.com/agentskills/agentskills).
 
-## Current status: PHASE 7 COMPLETE — **every finding now ships with a fix and a way to check it**
+## Current status: PHASE 8 COMPLETE — **the report now reads in plain language, and a thin score says so**
 
-**923 tests, 13 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**965 tests, 13 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -292,7 +309,7 @@ those newly-measured checks reporting, not new defects.
 > by file, because "SPA shell" was ambiguous between two fixtures that legitimately score very
 > differently — one is a dead shell whose bundles 404, the other genuinely hydrates.
 
-#### ⚠ The SPA headline problem — **deferred to Phase 8** (decided 2026-09-10)
+#### ✅ The SPA headline problem — **FIXED in Phase 8** (2026-09-11)
 
 `spa_hydrating.html` reports **80/100 at 0.175 coverage**. This is not a regression and never was:
 only 17.5% of total check weight is measurable on a page that builds itself in the browser, and the
@@ -314,9 +331,13 @@ problem *visible* but does nothing to stop the headline being *misread*.
 - The standing rule in Locked decisions — *never show a score without coverage* — needs to become a
   property the renderer **enforces**, not a convention the reader is trusted to honour.
 
-Phase 8 acceptance criterion for this: the rendered output for `spa_hydrating.html` must lead with the
-fact that the page could not be read, and must not let 80 or 100.0 stand as an unqualified headline
-anywhere.
+**Acceptance criterion, now met.** `spa_hydrating.html` reports `headline_reliable: false`, its
+verdict reads "We could not measure enough of your site to give it a score", Human Orientation says
+"We could not check what a visitor sees when they arrive" despite scoring 100.0, and `not_checked`
+names the cause in plain words: *blocked by an earlier problem: content only appears after
+javascript runs*. Neither 80 nor 100.0 stands as a bare headline anywhere. The numbers are still
+there — `discoverability_score` is still 80 and `category_scores.human_orientation` still 100.0 —
+because hiding a measurement is not the same as declining to headline it.
 
 Run it:
 ```bash
@@ -325,8 +346,7 @@ Run it:
 ```
 stdout is the report and nothing else; logs go to stderr. `--ci` exits 1 on any critical finding.
 
-Still to come: the non-expert output layer and HTML report (Phase 8), the precision/recall harness
-(Phase 9), and compliance sign-off (Phase 10).
+Still to come: the precision/recall harness (Phase 9) and compliance sign-off (Phase 10).
 
 ### Implementation phases
 | Phase | Scope | Status |
@@ -338,8 +358,8 @@ Still to come: the non-expert output layer and HTML report (Phase 8), the precis
 | 5 | Parity analyzers + i18n (engagement, quotability) | ✅ **DONE** |
 | 6 | Orchestration & report assembly | ✅ **DONE** |
 | 7 | `remediation-advisor` (6th skill) + proactive suggestions | ✅ **DONE** |
-| 8 | Non-expert output layer + `render_html.py` — **must also fix the SPA headline problem** (see Current status) | next |
-| 9 | `labeled_corpus.json` + precision/recall + archetype fixtures | |
+| 8 | Non-expert output layer (JSON) — SPA headline problem fixed. `render_html.py` **deferred, unscored** | ✅ **DONE** |
+| 9 | `labeled_corpus.json` + precision/recall + archetype fixtures | next |
 | 10 | Compliance & sign-off (`skills-ref validate`, README) | |
 
 ### Done
@@ -373,7 +393,7 @@ Still to come: the non-expert output layer and HTML report (Phase 8), the precis
 | 5 | **Disk headroom is thin** — ~738 MB free. Phase 3 needs ~150 MB for Chromium; the drive already hit 100% once during setup. | Medium | Monitor |
 | 6 | Chromium not provisioned | Low | ✅ **RESOLVED** — installed, Tier A verified |
 | 9 | **Content-type was unenforced** (PLAN §10), **timeouts duplicated** across `budgets`/`fetch`/`render`, **global deadline unwired**, size cap gap, undeclared artifact fields, 3 dead config keys, dead code, stale role enum. | High→Low | ✅ **ALL 8 RESOLVED 2026-09-05** |
-| 10 | **A category can score 100 from a single measurable check.** On the SPA fixture, Human Orientation reads 100.0 because 5 of its 6 checks were suppressed and only `viewport_meta` remained. Overall `coverage` exposes this, but a per-CATEGORY coverage figure would stop a category headline being read as a clean bill of health. Relevant to the rubric's output-design criterion. | Medium | **Partly resolved** — `summary.category_coverage` shipped in Phase 6. The residual half (the headline is *visible* but still *misreadable*) is now tracked as **the SPA headline problem** and is **assigned to Phase 8**; see Current status. |
+| 10 | **A category can score 100 from a single measurable check.** On the SPA fixture, Human Orientation reads 100.0 because 5 of its 6 checks were suppressed and only `viewport_meta` remained. Overall `coverage` exposes this, but a per-CATEGORY coverage figure would stop a category headline being read as a clean bill of health. Relevant to the rubric's output-design criterion. | Medium | ✅ **RESOLVED 2026-09-11.** `summary.category_coverage` shipped in Phase 6 made it visible; Phase 8 made it un-misreadable. A category under 0.5 coverage now says it could not be assessed, while keeping its number. Asserted by `test_a_category_scoring_100_off_one_check_does_not_claim_to_be_fine`. |
 | 8 | **Browser relaunched per page.** `render_page` launches Chromium for every page (~3-4 s of the ~5 s per-page cost). At 5 pages that is ~25 s of the 270 s budget — acceptable now, but reusing one browser across pages is the obvious win if the budget ever tightens. | Low | Optimize if needed |
 
 | 7 | **`allow_private_hosts` is a live SSRF bypass switch.** Default false and test-only, but if it were ever set true in a real run the guard is fully disabled. Phase 3 must pass it only from test fixtures, never from CLI input. | Medium | Guard in Phase 3 |
@@ -542,6 +562,34 @@ The harness itself also lied once: a mutation reported as surviving had been ser
 `.pyc`, because a file written and reverted inside one filesystem timestamp tick can defeat
 mtime-based invalidation. The mutation runs now set `PYTHONDONTWRITEBYTECODE`.
 
+### Phase 8 delivered
+- [x] `_narrative.py` — the non-expert output layer as pure functions over already-scored results.
+      It reads scores and never writes them, which is asserted rather than intended.
+- [x] `summary.verdict` + `summary.category_verdicts` — PLAN §9 layer 1, one plain sentence each,
+      wording in `config/checks.json` under a new `categories` block so it still lives in one file.
+- [x] `next_actions[]` — §9 layer 2: the same findings ordered by **points recoverable**, answering
+      do / where / confirm / gain. A ranked VIEW, not a second copy; `findings[]` keeps its severity
+      order so `F-001…` stay stable, which is exactly why it cannot also carry the ROI ordering.
+- [x] **`summary.headline_reliable` + `headline_caveat`** — §9.1, in the DATA. Below 0.5 coverage the
+      headline is withheld, so a CI job piping the JSON is protected the same way a reader is.
+- [x] `not_checked[]` — which categories rest on a minority of the evidence and why, in plain words.
+- [x] `tests/test_narrative.py` (37). **Six mutations applied, all caught.**
+
+### Phase 8 — why there is no HTML report
+
+The brief was read rather than assumed, and it settles this in four places:
+
+| The brief says | What follows |
+|---|---|
+| "We evaluate the submitted marketplace itself … **not any single report it happens to produce**" | The graded artifact is the package and its schema, not a rendered file |
+| Output-design row: the entrypoint "**is built to emit**" a report a non-expert could act on | The plain-language layer must live in what the entrypoint emits |
+| "emit a **single** audit report (fixed schema)" | An HTML file would be a second artifact, not that one |
+| the schema is "a **floor, not a ceiling** — you may add fields" | Adding plain-language fields to the JSON is explicitly sanctioned |
+
+The brief never mentions HTML, a rendered view or a viewer, and the submission is a zip of the
+marketplace plus a README. `render_html.py` therefore earns no rubric points and is **deferred, not
+cut** — revisit only if Phases 9 and 10 finish early.
+
 ### Not yet done — implementation order (PLAN.md §14)
 - [x] ~~**2.** `_safe_fetch.py` + security corpus.~~ **DONE**
 - [ ] **3.** Artifact assembly, `_page_select.py` (sitemap → homepage fallback), `_render.py` (Tier A/B);
@@ -550,9 +598,9 @@ mtime-based invalidation. The mutation runs now set `PYTHONDONTWRITEBYTECODE`.
 - [x] ~~**5.** parity analyzers + i18n~~ **DONE**
 - [x] ~~**6.** Orchestrator wiring → schema-valid JSON report.~~ **DONE**
 - [x] ~~**7.** `remediation-advisor` skill (**new, 6th**) incl. non-obvious proactive suggestions.~~ **DONE**
-- [ ] **8.** Non-expert output layer + `render_html.py` (folded in — `report-renderer` was cut as padding).
-      **Carries an extra acceptance criterion:** the SPA headline problem — a shell scoring 80 at 0.175
-      coverage must not render an unqualified pass-shaped headline. See Current status.
+- [x] ~~**8.** Non-expert output layer.~~ **DONE** — built into the REPORT, not a renderer, because the
+      brief grades the emitted schema. `render_html.py` deferred: the brief never mentions HTML and no
+      rubric row scores it. The SPA headline acceptance criterion is met and asserted.
 - [ ] **9.** `labeled_corpus.json` + precision/recall harness; non-English, consent-wall, adversarial fixtures.
 - [ ] **10.** `skills-ref validate` all 6 skills; README refresh; determinism + read-only sign-off.
 
@@ -581,7 +629,7 @@ below runs from the repo root with the virtual environment **activated**.
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 923 passed, 13 skipped
+pytest -q                                                                                  # 965 passed, 13 skipped
 for s in skills/*/; do skills-ref validate "$s"; done                                      # Phase 10, not installed yet
 ```
 
@@ -598,7 +646,8 @@ The advisor's standalone mode runs the proactive detectors only — with no find
 against, there is nothing corrective to say. Its full input set is `--findings`, `--check-states`
 and `--artifact`, which is what the orchestrator passes.
 
-Report goes to **stdout only**; logs to **stderr**; HTML only via `--html-out`. That separation is
+Report goes to **stdout only**; logs to **stderr**. (`--html-out` is deferred — see *why there is
+no HTML report* above.) That separation is
 enforced, not merely intended — see the stdout contract in Locked decisions — so redirecting stdout to a
 file always yields valid JSON:
 ```bash
@@ -1022,3 +1071,60 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   Verified: 15/15 clean runs of the file, then 10/10 with ten CPU-saturating processes running
   alongside. Three mutations — skipping disabled, deadline never expired, everything skipped
   regardless of budget — all caught. Test count 922 → **923**.
+- 2026-09-11 — **Phase 7 close-out before starting Phase 8.** Two real gaps found by auditing the
+  delivered work against PLAN §7 rather than against my own notes. Test count 923 → **927**.
+    1. **The README had gone stale the moment the sixth skill landed.** Its table listed five skills
+       while `marketplace.json` declared six, and it still announced remediation snippets as "still
+       to come (Phase 7)" after they had shipped. Marketplace composition is a scored criterion and
+       the README is what a reviewer reads first, so an undercounted marketplace is not cosmetic.
+       Fixed, and pinned by two drift tests — one asserting every manifest skill appears in the
+       README, one asserting a shipped phase is not still advertised as pending.
+    2. **Half of all corrective actions named no target.** PLAN §7 requires "the exact target
+       (`selector` / file location hint)". Measured across five fixtures: only **12 of 23** findings
+       carried a selector. That is not an analyzer bug — roughly half of all findings are an
+       ABSENCE, and a missing meta tag has no element to point at. Added a `target` hint to all 24
+       corrective templates, carried through `advise.py`, both schemas and the orchestrator's merge,
+       so every finding now answers "where do I make this change" even when no selector exists. The
+       analyzer's `selector` still names the exact element when there is one; the two are
+       complementary rather than alternatives.
+  `sample-report.json` regenerated with targets attached; score, coverage and findings unchanged.
+  Checked and found NOT to be Phase 7 gaps: `checks-reference.md` (PLAN lists it under HIGH ROI for
+  Phase 10), the User-Agent contact URL (Phase 10), and issue #7's SSRF kill-switch, which is
+  already guarded by `_assert_no_ssrf_bypass_via_cli` in the entrypoint.
+- 2026-09-11 — **Phase 8 complete: the non-expert output layer, built into the report rather than a
+  renderer.** Test count 927 → **965**.
+  **The scope was decided by reading the brief, not by following the plan's assumption.** PLAN §14
+  paired the output layer with `render_html.py`. The brief says it evaluates "the marketplace itself
+  … **not any single report it happens to produce**", its Output-design row asks whether the
+  entrypoint "**is built to emit**" a report a non-expert could act on, §2 requires "a **single**
+  audit report (fixed schema)", and the schema is "a **floor, not a ceiling** — you may add fields".
+  It never mentions HTML anywhere, and the submission is a zip plus a README. So the plain-language
+  layer belongs in the emitted JSON, and `render_html.py` is deferred as unscored rather than built.
+  **Delivered:** `_narrative.py` (pure, no I/O); `summary.verdict` and `summary.category_verdicts`
+  for §9 layer 1; `next_actions[]` for layer 2, ordered by points recoverable and answering do /
+  where / confirm / gain; `not_checked[]` naming what rested on too little evidence and why; and
+  `summary.headline_reliable` + `headline_caveat` for §9.1.
+  **Open issue #10 is finally closed.** Phase 6 made a category scoring 100.0 off one check
+  *visible* via `category_coverage`; Phase 8 makes it *un-misreadable*. Below 0.5 coverage the
+  sentence a reader acts on says the category could not be assessed — while the number stays in
+  `category_scores`, because declining to headline a measurement is not the same as hiding it.
+  **Three details that needed measuring rather than reasoning:**
+    1. The gap reasons first read `suppressed_by_failed_prerequisite`, which is true and useless.
+       §9 bans undefined jargon in layers 1 and 2, so the report now names the check that actually
+       blocked them in its own failure wording: *content only appears after javascript runs*.
+    2. The jargon rule is asserted as a property over the text the report ACTUALLY emits, not by
+       reading the wording once and trusting it.
+    3. **A fourth false-pass, caught by mutation.** `test_next_actions_is_ordered_by_what_the_fix_is
+       _worth` passed with the points-recoverable sort key deleted, because on that fixture severity
+       order and gain order coincide — one high at 4.5 then three mediums descending. It was
+       measuring the fixture, not the rule. Replaced with a case where the two orderings disagree: a
+       medium worth 20 points must outrank a critical worth 5.
+  Six mutations applied, all caught. `example.com` 66 and `python.org` 90 — **both unchanged**,
+  confirming the layer is presentation only. `sample-report.json` regenerated; score and coverage
+  identical.
+- 2026-09-11 — **`marketplace.json` now keys skills by `id`, not `name`.** The brief states that the
+  manifest is its own convention and not part of the agentskills.io spec, so its published example
+  is the ONLY specification this file has — and that example uses `id`. Skill-format hygiene is a
+  scored row and a grader matching the documented shape would not have found `name`. Pinned by
+  `test_the_manifest_matches_the_shape_the_brief_documents`, which also asserts each `id` equals its
+  folder name, since the spec already requires SKILL.md `name` to match the folder.

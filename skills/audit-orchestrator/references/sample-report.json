@@ -20,6 +20,15 @@
       "ai_discoverability": 0.6,
       "entity_trust": 0.0,
       "human_orientation": 0.1
+    },
+    "verdict": "We could not measure enough of your site to give it a score.",
+    "headline_reliable": false,
+    "headline_caveat": "This score comes from fewer than half of the checks, because most of the page could not be measured. Treat it as provisional and read what could not be checked before acting on the number.",
+    "category_verdicts": {
+      "ai_comprehension": "We could not check how quotable your page's facts are.",
+      "ai_discoverability": "AI assistants can reach your page, but part of what it says is hard for them to read.",
+      "entity_trust": "We could not check whether your page says who you are.",
+      "human_orientation": "We could not check what a visitor sees when they arrive."
     }
   },
   "diagnostics": {
@@ -74,6 +83,7 @@
       "suggested_action": {
         "summary": "Server-render or pre-render the page so its key facts are present in the initial HTML, before any JavaScript runs.",
         "priority": "critical",
+        "target": "your rendering setup (server-side rendering or prerendering) â€” not the markup",
         "validation": "Run `curl -sS file://tests/fixtures/broken_page.html | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix â€” no markup change reproduces it."
       },
       "id": "F-001"
@@ -96,10 +106,60 @@
       "suggested_action": {
         "summary": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives.",
         "priority": "medium",
+        "target": "the viewport meta tag in <head>",
         "snippet": "<!-- In <head>. Without it, mobile browsers render at desktop width and zoom out. -->\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
         "validation": "Open the page on a phone, or in device emulation, and confirm the text is readable without pinch-zooming."
       },
       "id": "F-002"
+    }
+  ],
+  "next_actions": [
+    {
+      "rank": 1,
+      "finding_id": "F-001",
+      "title": "Content only appears after JavaScript runs",
+      "severity": "critical",
+      "category": "ai_discoverability",
+      "why_it_matters": "Crawlers that do not execute JavaScript see an empty shell. Facts that only appear after hydration are invisible to them, so nothing is quotable or citable.",
+      "do": "Server-render or pre-render the page so its key facts are present in the initial HTML, before any JavaScript runs.",
+      "where": "your rendering setup (server-side rendering or prerendering) â€” not the markup",
+      "confirm": "Run `curl -sS file://tests/fixtures/broken_page.html | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix â€” no markup change reproduces it.",
+      "score_gain": 6.0
+    },
+    {
+      "rank": 2,
+      "finding_id": "F-002",
+      "title": "Mobile viewport is not declared",
+      "severity": "medium",
+      "category": "human_orientation",
+      "why_it_matters": "Most AI-referred traffic is mobile. Without a viewport declaration the page renders unusably small.",
+      "do": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives.",
+      "where": "the viewport meta tag in <head>",
+      "confirm": "Open the page on a phone, or in device emulation, and confirm the text is readable without pinch-zooming.",
+      "score_gain": 2.5
+    }
+  ],
+  "not_checked": [
+    {
+      "category": "ai_comprehension",
+      "coverage": 0.0,
+      "reasons": [
+        "blocked by an earlier problem: content only appears after javascript runs"
+      ]
+    },
+    {
+      "category": "entity_trust",
+      "coverage": 0.0,
+      "reasons": [
+        "blocked by an earlier problem: content only appears after javascript runs"
+      ]
+    },
+    {
+      "category": "human_orientation",
+      "coverage": 0.1,
+      "reasons": [
+        "blocked by an earlier problem: content only appears after javascript runs"
+      ]
     }
   ],
   "recommendations": [],

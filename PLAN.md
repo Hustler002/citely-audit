@@ -19,7 +19,8 @@ relevance, innovation, or differentiation.** v2 spent heavily on exactly those. 
 3. **Generalization is tested by construction on unseen sites.** This exposed a real defect in v2: the
    engagement heuristics were English-only and would false-positive on every non-English site (§8).
 
-**Locked decisions retained:** recommend-only (no writes, no re-audit) · JSON report + self-contained HTML ·
+**Locked decisions retained:** recommend-only (no writes, no re-audit) · JSON report (self-contained HTML
+deferred as unscored — see §9 and §14.8) ·
 homepage + sitemap-aware sample · subprocess+JSON contract · tiered rendering · strict 3-tier severity ·
 `verified`/`heuristic` confidence · stdout-JSON-only · never-crash · agentskills.io compliance.
 
@@ -344,7 +345,10 @@ adversarial. Expected score *ranges* asserted per archetype — proving sensible
 
 ## 9. Output design (rubric criterion 3) — "a non-expert could act on"
 
-The entrypoint emits one report readable at three depths, so a non-expert isn't forced through engineer detail:
+The entrypoint emits one report readable at three depths, so a non-expert isn't forced through engineer
+detail. **All three live in the emitted JSON** (decided 2026-09-11 from the brief, which grades the
+marketplace "not any single report it happens to produce" and calls its schema "a floor, not a
+ceiling"), so there is one wording rather than two that can disagree:
 
 1. **Plain-language verdict** — one sentence per category, no jargon. *"AI assistants can reach your site
    but can't read your product facts, because the page builds itself in the browser."*
@@ -382,6 +386,14 @@ Asserted as a test, in the same spirit as §8's archetype ranges: a behaviour, n
 
 This supersedes the residual half of open issue #10 in `CLAUDE.md`. The first half — a category scoring
 100 off one check being *invisible* — was closed in Phase 6 by `summary.category_coverage`.
+
+> **✅ Delivered 2026-09-11, and the location changed.** §9.1 is implemented as **report fields**, not
+> as renderer behaviour: `summary.headline_reliable`, `summary.headline_caveat`,
+> `summary.category_verdicts` and `not_checked[]`. The floor is `_narrative.COVERAGE_FLOOR = 0.5`.
+> Putting it in the data means a CI job piping the JSON is protected exactly as a reader is, and the
+> rule is testable without parsing markup. `spa_hydrating.html` now reports `headline_reliable:
+> false` with Human Orientation saying it could not be assessed despite scoring 100.0 — while both
+> numbers remain in `summary`, because declining to headline a measurement is not hiding it.
 
 ---
 
@@ -503,8 +515,11 @@ design. **No engineering effort is spent here** — it is not in the rubric.
    values, a validation procedure on every one of the 24 checks, and four proactive detectors. The
    fifth §7 example was not built — it had become a scored check; see §7. Advisor is score-neutral
    by construction and its failure costs snippets, never the report.
-8. **Non-expert output layer** + `render_html.py` (rubric criterion 3), **including §9.1 — low coverage
-   must suppress the headline**, with the SPA-shell acceptance criterion asserted as a test.
+8. ~~**Non-expert output layer** + `render_html.py` (rubric criterion 3), **including §9.1**.~~
+   ✅ **PHASE 8 DONE (2026-09-11)** — the output layer shipped **inside the report**, not as a
+   renderer. `render_html.py` is **deferred as unscored**: the brief grades "the marketplace itself …
+   not any single report it happens to produce", requires "a single audit report (fixed schema)", and
+   never mentions HTML. The §9.1 acceptance criterion is met and asserted.
 9. `labeled_corpus.json` + precision/recall harness; non-English, consent-wall, adversarial fixtures.
 10. `skills-ref validate` all 6; README/CLAUDE.md; final determinism + read-only sign-off.
 

@@ -176,7 +176,7 @@ def test_the_logging_discovery_actually_finds_every_skill():
     """A guard whose input set is empty, or short, silently guards nothing."""
     found = _scripts_defining_configure_logging()
     skills = {p.parent.parent.name for p in found}
-    declared = {s["name"] for s in json.loads(
+    declared = {s["id"] for s in json.loads(
         (REPO_ROOT / "marketplace.json").read_text(encoding="utf-8"))["skills"]}
     assert skills == declared, f"skills without a configure_logging: {declared - skills}"
 

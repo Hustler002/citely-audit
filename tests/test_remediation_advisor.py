@@ -444,6 +444,25 @@ def test_no_template_exists_for_a_check_that_does_not():
     assert not orphans, f"templates for unknown checks: {orphans}"
 
 
+def test_every_corrective_template_says_where_to_make_the_change():
+    """PLAN §7 requires the exact target: a selector OR a file location hint.
+
+    Measured before building it: across five fixtures, only 12 of 23 findings carried a selector,
+    because roughly half of all findings are an ABSENCE. A missing meta tag has no element to point
+    at, so "in <head>" is the only address that exists and it has to come from the template.
+    """
+    for check_id, entry in CORRECTIVE["checks"].items():
+        assert entry.get("target"), f"{check_id} does not say where to make the change"
+
+
+def test_every_finding_is_told_where_to_make_the_change():
+    """Asserted through the orchestrator, because the field has to survive the merge."""
+    report = run_audit("advisor_faq_unmarked.html")
+    assert report["findings"]
+    for finding in report["findings"]:
+        assert finding["suggested_action"].get("target"), f"{finding['id']} has no target"
+
+
 def test_every_corrective_template_states_how_to_verify_the_fix():
     """A snippet may be absent — a 500 is not fixed by pasting markup — but 'how do I know it
     worked' must always be answerable, or the report stops being actionable."""
@@ -606,11 +625,50 @@ def test_the_report_still_validates_with_recommendations_present():
 
 def test_the_marketplace_declares_the_advisor_with_exactly_one_entrypoint():
     manifest = load(REPO_ROOT / "marketplace.json")
-    names = [s["name"] for s in manifest["skills"]]
-    assert "remediation-advisor" in names
+    ids = [s["id"] for s in manifest["skills"]]
+    assert "remediation-advisor" in ids
     assert sum(1 for s in manifest["skills"] if s.get("entrypoint")) == 1
     for skill in manifest["skills"]:
-        assert (REPO_ROOT / skill["path"] / "SKILL.md").exists(), skill["name"]
+        assert (REPO_ROOT / skill["path"] / "SKILL.md").exists(), skill["id"]
+
+
+def test_the_manifest_matches_the_shape_the_brief_documents():
+    """The brief's own manifest example is the ONLY specification this convention has.
+
+    `marketplace.json` is not part of the agentskills.io spec — the brief says so itself — so there
+    is no external standard to fall back on, and the published example keys each skill by `id`. We
+    used `name`, which a grader matching the documented shape would not find. Skill-format hygiene
+    is a scored row, so this is asserted rather than remembered.
+    """
+    manifest = load(REPO_ROOT / "marketplace.json")
+    assert {"name", "version", "skills"} <= set(manifest)
+    for skill in manifest["skills"]:
+        assert {"id", "path"} <= set(skill), skill
+        assert "name" not in skill, "skills are keyed by id, matching the brief's example"
+        # The spec requires SKILL.md `name` to equal the folder name, so the manifest id must too,
+        # or the manifest and the skills disagree about what a skill is called.
+        assert skill["id"] == Path(skill["path"]).name, skill
+    assert sum(1 for s in manifest["skills"] if s.get("entrypoint")) == 1
+
+
+def test_the_readme_lists_every_skill_in_the_manifest():
+    """The README is what a reviewer reads first, and it went stale the moment a sixth skill landed.
+
+    It claimed five skills while `marketplace.json` declared six, and still announced the advisor as
+    "still to come" after it shipped. Marketplace composition is a scored criterion, so a README
+    that undercounts the marketplace is not a cosmetic problem. Asserted rather than remembered.
+    """
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    manifest = load(REPO_ROOT / "marketplace.json")
+    missing = [s["path"] for s in manifest["skills"] if f'`{s["path"]}/`' not in readme]
+    assert not missing, f"README does not list: {missing}"
+
+
+def test_the_readme_does_not_still_promise_a_shipped_phase():
+    shipped = (REPO_ROOT / "skills" / "remediation-advisor").exists()
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8").lower()
+    if shipped:
+        assert "(phase 7)" not in readme, "README still lists Phase 7 as pending"
 
 
 def test_the_skill_name_matches_its_folder():

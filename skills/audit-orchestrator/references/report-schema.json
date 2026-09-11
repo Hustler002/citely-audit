@@ -130,6 +130,37 @@
               "maximum": 1
             }
           }
+        },
+        "verdict": {
+          "type": "string",
+          "minLength": 1,
+          "description": "PLAN §9 layer 1: the headline in one plain sentence, no undefined jargon. Chosen from config/checks.json by score band, so report wording has one home."
+        },
+        "headline_reliable": {
+          "type": "boolean",
+          "description": "False when coverage is below the floor (0.5). §9.1: a score built on a minority of the evidence is a statement about the checks that were measurable, not about the site, and must not be presented as a verdict. Carried in the data so every consumer honours it, not just a renderer."
+        },
+        "headline_caveat": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Present only when headline_reliable is false, so a consumer can branch on its presence rather than parse prose."
+        },
+        "category_verdicts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "One plain sentence per category. A category whose own coverage is below the floor says it could not be assessed, even though its score stays in category_scores.",
+          "propertyNames": {
+            "enum": [
+              "ai_discoverability",
+              "ai_comprehension",
+              "entity_trust",
+              "human_orientation"
+            ]
+          }
         }
       },
       "$comment": "Invariant enforced in code (not expressible in plain JSON Schema): total_findings == critical + high + medium."
@@ -396,6 +427,10 @@
               "validation": {
                 "type": "string",
                 "description": "How to confirm the fix worked."
+              },
+              "target": {
+                "type": "string",
+                "description": "Where to make the change, in words (e.g. \"the <title> element in <head>\"). Complements findings[].selector, which names the exact element only when one exists."
               }
             }
           }
@@ -448,6 +483,113 @@
           },
           "validation": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "description": "PLAN §9 layer 2: the same findings ordered by points recoverable, answering do / where / confirm / gain. A ranked VIEW, not a second copy — findings[] is ordered by severity so F-001… stay stable between runs, so it cannot also carry the ROI ordering.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "rank",
+          "finding_id",
+          "do"
+        ],
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "finding_id": {
+            "type": "string",
+            "pattern": "^F-\\d{3,}$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "ai_discoverability",
+              "ai_comprehension",
+              "entity_trust",
+              "human_orientation"
+            ]
+          },
+          "why_it_matters": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "do": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "where": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirm": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "score_gain": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "not_checked": {
+      "type": "array",
+      "description": "Categories whose verdict rests on a minority of the evidence, and why. A short findings list cannot tell 'nothing is wrong' from 'we could not look'; both are silence and only one is good news.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "category",
+          "coverage"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "ai_discoverability",
+              "ai_comprehension",
+              "entity_trust",
+              "human_orientation"
+            ]
+          },
+          "coverage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }
