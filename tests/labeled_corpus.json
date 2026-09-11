@@ -1,0 +1,137 @@
+{
+  "version": "1.0",
+  "_note": "Ground truth for the precision/recall harness (PLAN.md §6.3, §8). Labels are written from each fixture's CONSTRUCTION, never copied from what the auditor happens to output — a corpus recorded from the tool's own behaviour asserts nothing. When a run disagrees with a label, one of the two is wrong and the disagreement is the finding.",
+  "_fields": {
+    "must_find": "check ids that MUST appear as findings. A miss here is a RECALL failure.",
+    "must_not_find": "check ids that must NOT appear as findings. A hit here is a FALSE POSITIVE — the rubric penalises these as hard as misses.",
+    "score_range": "[min, max] inclusive. Ranges, not exact numbers: PLAN §8 asks for sensible behaviour per archetype, and pinning exact scores would turn every legitimate improvement into a test failure.",
+    "must_match": "optional — another fixture whose score and finding set this one must equal exactly."
+  },
+  "_not_covered_here": "The consent-wall / bot-challenge archetype is served by tests/fixture_server.py (/consent, /challenge) and asserted in test_artifact.py and test_resilience.py. It cannot live in this corpus because blocked-page detection happens during acquisition, and this harness audits local files where there is nothing to be blocked by.",
+  "fixtures": {
+    "healthy_page.html": {
+      "archetype": "static / server-rendered, well built",
+      "why": "The control. If anything here regresses, the tool has started reporting problems on a page that does not have them.",
+      "must_find": ["entity.opengraph_identity"],
+      "must_not_find": [
+        "access.http_ok", "render.content_without_js", "extraction.semantic_html",
+        "content.title_descriptive", "content.meta_description", "content.heading_hierarchy",
+        "content.scannable_blocks", "entity.structured_data_present",
+        "entity.organization_declared", "entity.sameas_present", "entity.sameas_authority",
+        "orientation.viewport_meta", "orientation.heading_first_viewport",
+        "orientation.primary_cta", "orientation.value_proposition"
+      ],
+      "score_range": [90, 100]
+    },
+    "archetype_adversarial.html": {
+      "archetype": "adversarial — prompt injection in seven carriers",
+      "why": "Structurally a clone of healthy_page.html, so any difference in score or findings is attributable to the injected instructions and nothing else. Injected text must never improve a verdict, and must reach the report only as sanitized evidence.",
+      "must_match": "healthy_page.html",
+      "must_find": ["entity.opengraph_identity"],
+      "must_not_find": [
+        "access.http_ok", "render.content_without_js", "content.title_descriptive",
+        "entity.structured_data_present", "orientation.value_proposition"
+      ],
+      "score_range": [90, 100]
+    },
+    "archetype_ecommerce_pdp.html": {
+      "archetype": "e-commerce product detail page",
+      "why": "A correctly built commercial page: Product and Organization markup, a specification table, a price, a real call to action. Almost everything here is a must-NOT-find, which is what makes it a false-positive trap rather than a detection test.",
+      "must_find": [],
+      "must_not_find": [
+        "access.http_ok", "render.content_without_js", "extraction.semantic_html",
+        "extraction.facts_not_image_only", "content.title_descriptive",
+        "content.meta_description", "content.heading_hierarchy", "content.scannable_blocks",
+        "entity.structured_data_present", "entity.organization_declared",
+        "entity.sameas_present", "entity.sameas_authority", "entity.name_consistency",
+        "orientation.viewport_meta", "orientation.heading_first_viewport",
+        "orientation.primary_cta", "orientation.value_proposition"
+      ],
+      "score_range": [90, 100]
+    },
+    "archetype_image_heavy.html": {
+      "archetype": "image-heavy — substance carried by pictures",
+      "why": "Three fee tables exist only as images with no text equivalent, and no structured data is published. Both are real defects. The two charts that DO carry their figures in alt text are the near-miss: they are an accessibility pass and a discoverability gap, and the audit must not confuse the two.",
+      "must_find": [
+        "extraction.facts_not_image_only", "entity.structured_data_present",
+        "entity.organization_declared"
+      ],
+      "must_not_find": [
+        "access.http_ok", "render.content_without_js", "content.title_descriptive",
+        "content.meta_description", "orientation.viewport_meta",
+        "orientation.heading_first_viewport", "orientation.primary_cta"
+      ],
+      "score_range": [60, 90]
+    },
+    "archetype_div_soup.html": {
+      "archetype": "unstructured div soup",
+      "why": "The honest worst case for a real site: server-rendered and perfectly readable to a person, structurally invisible to a machine. Deliberately NOT a JavaScript shell — render.content_without_js must PASS, so nothing is suppressed and every downstream check has to stand on its own merits.",
+      "must_find": [
+        "extraction.semantic_html", "content.heading_hierarchy", "content.meta_description",
+        "content.scannable_blocks", "entity.structured_data_present",
+        "entity.organization_declared", "orientation.viewport_meta",
+        "orientation.heading_first_viewport", "orientation.value_proposition"
+      ],
+      "must_not_find": ["access.http_ok", "render.content_without_js"],
+      "score_range": [10, 45]
+    },
+    "broken_page.html": {
+      "archetype": "client-rendered shell, dead bundles",
+      "why": "The dependency-suppression case from PLAN §6.3. One critical finding about the root cause, NOT a dozen downstream false positives about content that could never be measured.",
+      "must_find": ["render.content_without_js"],
+      "must_not_find": [
+        "content.title_descriptive", "content.meta_description", "content.scannable_blocks",
+        "quotability.self_contained_facts", "density.factual_ratio",
+        "entity.structured_data_present", "entity.organization_declared",
+        "entity.sameas_present", "orientation.heading_first_viewport",
+        "orientation.primary_cta", "orientation.value_proposition"
+      ],
+      "score_range": [20, 40]
+    },
+    "spa_hydrating.html": {
+      "archetype": "genuinely hydrating single-page app",
+      "why": "Raw HTML is a shell; the rendered DOM is not. Same suppression property as the dead shell, reached by a different route. Its score is high on very little evidence, which is the §9.1 case asserted in test_narrative.py.",
+      "must_find": ["render.content_without_js"],
+      "must_not_find": [
+        "content.title_descriptive", "content.scannable_blocks",
+        "quotability.self_contained_facts", "entity.structured_data_present",
+        "entity.organization_declared", "orientation.value_proposition"
+      ],
+      "score_range": [60, 90]
+    },
+    "non_english_page.html": {
+      "archetype": "non-English (German), structurally excellent",
+      "why": "The generalization assertion. Language-dependent checks must resolve to unknown, never fail: judging a German page with English vocabulary would produce a wall of false positives on exactly the unseen sites the brief tests. The gap must show up as coverage, not as findings.",
+      "must_find": [],
+      "must_not_find": [
+        "quotability.self_contained_facts", "density.factual_ratio",
+        "orientation.value_proposition", "content.title_descriptive",
+        "content.heading_hierarchy", "entity.structured_data_present",
+        "orientation.heading_first_viewport", "orientation.viewport_meta"
+      ],
+      "score_range": [85, 100]
+    },
+    "deep_chrome_page.html": {
+      "archetype": "corporate / chrome-heavy, hero far down the markup",
+      "why": "The python.org shape: the first heading sits 41,752 characters into <body>. The fold window is budgeted in visible text, not markup, so a mega-menu must not push the real hero out of the measured window.",
+      "must_find": [],
+      "must_not_find": [
+        "access.http_ok", "render.content_without_js",
+        "orientation.heading_first_viewport", "orientation.value_proposition"
+      ],
+      "score_range": [65, 90]
+    },
+    "advisor_faq_unmarked.html": {
+      "archetype": "small trade business with correct local markup",
+      "why": "A locksmith publishing a Locksmith node with address, telephone and sameAs. Identity is graded by SHAPE, so a schema.org subtype nobody listed still counts, and the headline 'Emergency lock repair across Leeds' is a value proposition even though no word list contains 'locksmith'.",
+      "must_find": [],
+      "must_not_find": [
+        "entity.structured_data_present", "entity.organization_declared",
+        "entity.sameas_present", "entity.name_consistency",
+        "orientation.value_proposition", "orientation.heading_first_viewport",
+        "orientation.primary_cta", "content.title_descriptive", "content.meta_description"
+      ],
+      "score_range": [85, 100]
+    }
+  }
+}

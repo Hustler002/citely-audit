@@ -112,4 +112,12 @@ lowest-priority checks under pressure and marks the report `partial: true` with 
 ```bash
 skills-ref validate ./skills/audit-orchestrator   # repeat per skill folder
 pytest
+python tests/run_precision_recall.py              # precision/recall against the labelled corpus
 ```
+
+`tests/labeled_corpus.json` labels ten fixtures — static, hydrating and dead JavaScript shells,
+e-commerce, image-heavy, div soup, non-English, chrome-heavy corporate, a small trade business, and
+an adversarial page — with the checks each one MUST and must NOT be reported for, plus an expected
+score band. Labels come from how each fixture is built, never from what the tool outputs, and the
+adversarial fixture is a structural clone of the healthy one so that any difference is attributable
+to its injected instructions and nothing else.

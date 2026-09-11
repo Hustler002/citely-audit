@@ -187,6 +187,15 @@ PowerShell terminal needs none of this.**
   of this passed with the points key deleted, because on that fixture severity order and gain order
   coincided — the fourth false-pass this project has caught by mutation. It is now asserted on a
   case where the two orderings disagree.
+- **A word list may be positive evidence; it may never be a requirement** (added 2026-09-11).
+  Third instance of this rule, after the SPA markers and the entity type allowlist. A closed
+  vocabulary only ever fits the sites it was written against, and the open web has every trade and
+  product category in it. Where a list must exist, it belongs on the SUBTRACTING side: a phrase
+  missing from `vague_markers` can never cause a failure, whereas a category missing from
+  `offering_nouns` used to cause one on every unseen trade.
+- **Corpus labels come from a fixture's construction, never from a run** (added 2026-09-11).
+  `labeled_corpus.json` records what each page was BUILT to contain. Recording what the auditor
+  happens to emit would produce a corpus that passes by definition and measures nothing.
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
@@ -276,9 +285,9 @@ PowerShell terminal needs none of this.**
 - Base spec has **no** `marketplace.json` / `entrypoint` concept — bespoke to this brief.
 - Official validator: `skills-ref validate ./<skill>` (github.com/agentskills/agentskills).
 
-## Current status: PHASE 8 COMPLETE — **the report now reads in plain language, and a thin score says so**
+## Current status: PHASE 9 COMPLETE — **precision and recall are measured, not asserted**
 
-**965 tests, 13 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**983 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -346,7 +355,7 @@ Run it:
 ```
 stdout is the report and nothing else; logs go to stderr. `--ci` exits 1 on any critical finding.
 
-Still to come: the precision/recall harness (Phase 9) and compliance sign-off (Phase 10).
+Still to come: compliance sign-off (Phase 10).
 
 ### Implementation phases
 | Phase | Scope | Status |
@@ -359,8 +368,8 @@ Still to come: the precision/recall harness (Phase 9) and compliance sign-off (P
 | 6 | Orchestration & report assembly | ✅ **DONE** |
 | 7 | `remediation-advisor` (6th skill) + proactive suggestions | ✅ **DONE** |
 | 8 | Non-expert output layer (JSON) — SPA headline problem fixed. `render_html.py` **deferred, unscored** | ✅ **DONE** |
-| 9 | `labeled_corpus.json` + precision/recall + archetype fixtures | next |
-| 10 | Compliance & sign-off (`skills-ref validate`, README) | |
+| 9 | `labeled_corpus.json` + precision/recall + archetype fixtures | ✅ **DONE** |
+| 10 | Compliance & sign-off (`skills-ref validate`, README) | next |
 
 ### Done
 - [x] Full scaffold: manifest, 2 JSON Schemas, config, 5 `SKILL.md`, script skeletons, fixtures, tests.
@@ -590,6 +599,58 @@ The brief never mentions HTML, a rendered view or a viewer, and the submission i
 marketplace plus a README. `render_html.py` therefore earns no rubric points and is **deferred, not
 cut** — revisit only if Phases 9 and 10 finish early.
 
+### Phase 9 delivered
+- [x] `tests/labeled_corpus.json` — 10 fixtures labelled `must_find` / `must_not_find` /
+      `score_range`, written from each fixture's CONSTRUCTION. A corpus recorded from the tool's own
+      output asserts nothing.
+- [x] `tests/run_precision_recall.py` — prints the table for a human; `tests/test_corpus.py` (18)
+      asserts the same numbers as a CI gate. One implementation, two entry points.
+- [x] Four new archetypes: **e-commerce PDP**, **image-heavy**, **div soup**, **adversarial**.
+      The adversarial one is a structural CLONE of `healthy_page.html` plus injections in seven
+      carriers, so any difference is attributable to the injection and nothing else.
+- [x] **Five stale Phase-1 stub files deleted.** Their skip reason still read "checks not
+      implemented yet" — untrue since Phase 4 — and a reviewer running `pytest` saw it. The suite
+      now reports **0 skipped**. Their three unasserted properties were absorbed, not dropped:
+      the sample report is checked against a fresh run, two audits of one input are asserted
+      byte-identical, and the broken page must score materially below the healthy one.
+
+| Corpus result | |
+|---|---|
+| recall | 100% (16 labelled defects, 0 missed) |
+| precision | 100% (98 must-not-find labels, 0 violated) |
+| scores in band | 10 of 10 |
+| adversarial twin | identical score and findings to the healthy page |
+
+### Phase 9 — the corpus found a real defect on its first use
+
+`orientation.value_proposition` gated on a closed list of **18 offering nouns and 36 action verbs**.
+Consequences, measured rather than argued:
+
+| Page | Old verdict |
+|---|---|
+| "Emergency lock repair across Leeds" | **fail, high** — no list entry for locksmithing |
+| "Rowan 3-Season Down Jacket" + weight, fill, use case | **fail, high** |
+| "Archival book printing for short runs" | partial |
+| `example.com`, which offers nothing at all | **partial — better than the locksmith** |
+
+The ranking was inverted: a placeholder page outranked a real business's clear proposition. Same
+defect family as the five-name entity type allowlist fixed on 2026-09-10, and PLAN §8 already
+forbids it — word lists are "positive evidence, never a requirement".
+
+**Rewritten around SPECIFICITY.** A concrete anchor is a figure with a unit or a proper noun used
+inside a sentence; vague markers only ever subtract, so a phrase missing from that list can never
+cause a failure. **Three defects in my own fix, each found by probing rather than reasoning:**
+  1. Title Case headings read as proper nouns, so "Example Domain" looked specific. Fixed by
+     ignoring a capitalised word that follows another capitalised word.
+  2. A single brand name rescued a hero carrying seven filler phrases, because the penalty
+     subtracted while anchor plus vocabulary outran it. Filler now CAPS the outcome instead.
+  3. `example.com` still passed on the link label "Learn more" matching the verb "learn". A single
+     incidental hit is not evidence, so the vocabulary path now needs a verb AND a noun.
+
+Result: `ecommerce` 94 → 100, the locksmith 87 → 93, `example.com` correctly below both. Every
+other fixture unchanged, and all 454 analyzer tests still pass including the Phase-5 anti-gaming
+tests.
+
 ### Not yet done — implementation order (PLAN.md §14)
 - [x] ~~**2.** `_safe_fetch.py` + security corpus.~~ **DONE**
 - [ ] **3.** Artifact assembly, `_page_select.py` (sitemap → homepage fallback), `_render.py` (Tier A/B);
@@ -601,7 +662,7 @@ cut** — revisit only if Phases 9 and 10 finish early.
 - [x] ~~**8.** Non-expert output layer.~~ **DONE** — built into the REPORT, not a renderer, because the
       brief grades the emitted schema. `render_html.py` deferred: the brief never mentions HTML and no
       rubric row scores it. The SPA headline acceptance criterion is met and asserted.
-- [ ] **9.** `labeled_corpus.json` + precision/recall harness; non-English, consent-wall, adversarial fixtures.
+- [x] ~~**9.** `labeled_corpus.json` + precision/recall harness; archetype fixtures.~~ **DONE**
 - [ ] **10.** `skills-ref validate` all 6 skills; README refresh; determinism + read-only sign-off.
 
 ### Structural deltas from the current scaffold (v3 requires)
@@ -626,10 +687,11 @@ below runs from the repo root with the virtual environment **activated**.
 `(.venv)` prefix; `where python` should then point inside `.venv\Scripts`.
 
 ```bash
+python tests/run_precision_recall.py                                                     # corpus table
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 965 passed, 13 skipped
+pytest -q                                                                                  # 983 passed, 0 skipped
 for s in skills/*/; do skills-ref validate "$s"; done                                      # Phase 10, not installed yet
 ```
 
@@ -1128,3 +1190,37 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   scored row and a grader matching the documented shape would not have found `name`. Pinned by
   `test_the_manifest_matches_the_shape_the_brief_documents`, which also asserts each `id` equals its
   folder name, since the spec already requires SKILL.md `name` to match the folder.
+- 2026-09-11 — **Phase 9 complete: precision and recall are now measured rather than asserted.**
+  Test count 965 → **983**, and **0 skipped** for the first time.
+  Built `tests/labeled_corpus.json` (10 fixtures), `tests/run_precision_recall.py` and
+  `tests/test_corpus.py`, plus four new archetypes: an e-commerce product page, an image-heavy
+  page, a div-soup page and an adversarial one. Labels are written from each fixture's
+  CONSTRUCTION; a corpus recorded from the tool's own output would pass by definition.
+  **The corpus found a real, high-severity false positive on its first run**, which is the whole
+  reason for building it. `orientation.value_proposition` gated on 18 offering nouns and 36 action
+  verbs, so it failed "Emergency lock repair across Leeds" and a product page stating its weight,
+  fill and use case — while `example.com`, which offers nothing whatsoever, scored BETTER than the
+  locksmith. The ranking was inverted. Third instance of the closed-word-list defect, after the SPA
+  markers and the entity type allowlist, and PLAN §8 already forbids it.
+  Rewritten around specificity: a concrete anchor is a figure with a unit or a proper noun used
+  inside a sentence, and vague markers only subtract, so a missing phrase can never cause a failure.
+  **Three defects in my own fix, all found by probing the branches rather than reasoning about
+  them:** Title Case headings read as proper nouns so "Example Domain" looked specific; one brand
+  name rescued a hero carrying seven filler phrases because the penalty subtracted rather than
+  capped; and `example.com` still passed on the link label "Learn more" matching the verb "learn",
+  so the vocabulary path now requires a verb AND a noun. Ecommerce 94 → 100, locksmith 87 → 93,
+  every other fixture unchanged, all 454 analyzer tests still green including the Phase-5
+  anti-gaming ones.
+  **The corpus was mutation-tested, because one that passes first time and has never been seen to
+  fail is indistinguishable from one that asserts nothing.** Three mutations, each aimed at a
+  different column: a detector that never fires took recall to 87.5%, a check that always fails
+  took precision to 95.2%, and a broken render check collapsed both. All caught. The sample-report
+  sync test was mutated five more ways — score changed, finding removed, verdict reworded, snippet
+  altered, extra page audited — and caught all five, which matters because its path normaliser had
+  just been made more permissive to survive relative-versus-absolute paths.
+  **Five stale Phase-1 stub files deleted.** Their skip reason still read "checks not implemented
+  yet", four phases after it stopped being true, and it was the first thing a reviewer running
+  `pytest` would see. Their three genuinely unasserted properties were absorbed rather than lost:
+  the committed sample report is now checked against a fresh run — it had been regenerated by hand
+  every phase, which is exactly the step that goes stale — two audits of one input are asserted
+  byte-identical, and the broken page must score materially below the healthy one.

@@ -333,6 +333,15 @@ sitemap, of `/about`, or of any URL convention — all are opportunistic.
 **Conservative thresholds over fitted ones.** Structural checks carry the weight; statistical thresholds are
 set at the *clearly wrong* boundary, not the median of my fixtures. Prefer `unknown` to a confident wrong call.
 
+> **The word-list rule, restated after a third breach (2026-09-11).** "No hardcoded allowlists …
+> used only as positive evidence, never as a requirement" was written for SPA markers, breached by
+> the entity type allowlist (fixed 2026-09-10), and breached again by
+> `orientation.value_proposition`, which REQUIRED a word from an 18-noun list. It failed "Emergency
+> lock repair across Leeds" at high severity while passing example.com, which offers nothing.
+> The general form: where a list must exist, put it on the **subtracting** side. A phrase missing
+> from a vague-marker list can never cause a failure; a category missing from a required list
+> causes one on every unseen trade.
+
 **Real-world messiness.** Non-HTML responses, mixed/incorrect encodings, huge pages, gzipped/index/404
 sitemaps (degrade silently to homepage-only), infinite redirects, slow origins, geo/consent interstitials,
 JS-heavy and legacy-HTML sites alike.
@@ -520,7 +529,13 @@ design. **No engineering effort is spent here** — it is not in the rubric.
    renderer. `render_html.py` is **deferred as unscored**: the brief grades "the marketplace itself …
    not any single report it happens to produce", requires "a single audit report (fixed schema)", and
    never mentions HTML. The §9.1 acceptance criterion is met and asserted.
-9. `labeled_corpus.json` + precision/recall harness; non-English, consent-wall, adversarial fixtures.
+9. ~~`labeled_corpus.json` + precision/recall harness; archetype fixtures.~~
+   ✅ **PHASE 9 DONE (2026-09-11)** — 10 labelled fixtures, recall and precision both 100% with
+   16 must-find and 98 must-not-find labels, all 10 scores in band. Labels are written from each
+   fixture's construction, never recorded from a run. Consent-wall stays in the fixture server:
+   blocked-page detection happens during acquisition, and the corpus audits local files.
+   It earned its keep immediately by exposing the `orientation.value_proposition` word-list
+   gate, which failed real value propositions while passing example.com — see §8.
 10. `skills-ref validate` all 6; README/CLAUDE.md; final determinism + read-only sign-off.
 
 ---
