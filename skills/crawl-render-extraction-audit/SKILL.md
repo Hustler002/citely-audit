@@ -2,7 +2,7 @@
 name: crawl-render-extraction-audit
 description: Diagnoses AI crawl-and-ingestion failures (mechanic 1) — bot access, JS-render/readability gaps, and facts trapped in images/canvas. Use as part of the brand AI-readiness audit, over the shared crawl artifact. Detects SSR-vs-CSR content loss and non-semantic facts that fail to parse into AI context.
 license: Apache-2.0
-compatibility: Requires Python 3.11+. Optional Playwright/Chromium for the Tier-A raw-vs-rendered diff; without it, uses a browserless SPA heuristic (Tier B).
+compatibility: Requires Python 3.11 or 3.12 (the pinned greenlet and lxml publish no wheels beyond 3.12). Optional Playwright/Chromium for the Tier-A raw-vs-rendered diff; without it, uses a browserless SPA heuristic (Tier B).
 metadata:
   mechanic: "1"
   category: crawl-ingestion

@@ -2,7 +2,7 @@
 name: audit-orchestrator
 description: Audits a website for AI discoverability and on-site engagement. Use when the user gives a URL and wants to know why AI assistants fail to cite the brand or why visitors bounce. Performs one safe crawl + render, runs the four analysis skills, merges and ranks findings, and emits a single JSON audit report.
 license: Apache-2.0
-compatibility: Requires Python 3.11+ and network access to the target site. Optional Playwright/Chromium for Tier-A render diff (audit degrades to a browserless heuristic without it). Provision Chromium once as a setup step, not during a run.
+compatibility: Requires Python 3.11 or 3.12 (the pinned greenlet and lxml publish no wheels beyond 3.12) and network access to the target site. Optional Playwright/Chromium for Tier-A render diff (audit degrades to a browserless heuristic without it). Provision Chromium once as a setup step, not during a run.
 metadata:
   role: entrypoint
   project: citely-audit

@@ -75,8 +75,14 @@ PowerShell terminal needs none of this.**
   Suggestions may be **proactive** (improvements where no defect was found).
 - **Orchestration** = subprocess + JSON file contract. The orchestrator owns **ALL** network I/O; every
   analyzer is a pure, network-free function of the shared crawl artifact — **zero exceptions**.
-- **Wikidata lookup** sits **in the orchestrator's fetch stage** (left of the artifact boundary), stored as
-  `external_corroboration`. Off by default (`--allow-external`), soft-fail → dependent checks `unknown`.
+- **There is NO external lookup, and no flag pretends otherwise** (corrected 2026-09-12). PLAN §14
+  lists Wikidata corroboration under NICE TO HAVE and it was never built. This entry previously
+  described it as shipped, and `--allow-external` existed for nine phases doing nothing: it reached
+  `diagnostics.external_lookup` and stopped, while `external_corroboration` stayed hardcoded `None`
+  and no request was ever issued. The flag is removed. If it is ever built it belongs in the fetch
+  stage, left of the artifact boundary, and the artifact already declares the
+  `external_corroboration` slot for its result; `diagnostics.external_lookup` is now a constant
+  `false` disclosing that every piece of evidence came from the audited pages themselves.
 - **Rendering** = tiered. Tier A = Playwright render diff; Tier B = browserless SPA heuristic. Chromium is
   provisioned as a SETUP step, never inside the timed run. Disclosed via `diagnostics.render_mode`.
 - **Page scope** = homepage + **sitemap-aware sample** (default 5), degrading silently to homepage-only.
@@ -1461,3 +1467,38 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   charts among 10 images; that is ratio 0.40 against a 0.50 cap, so `partial` was correct. Replaced
   with a case above the cap, and a separate test now pins where an unjudgeable image lands in the
   ratio — denominator yes, numerator no — so the dilution is asserted rather than assumed.
+- 2026-09-12 — **Pre-submission audit against the judging rubric: three blockers fixed.** All three
+  were found by auditing the SUBMISSION rather than the code, and none would have been caught by a
+  green test run, because none of them is a logic defect.
+  **1. Windows cache files were committed and shipped in the archive.** Four `.db` files sat under a
+  literal `%SystemDrive%` directory at the repo root, created once by a command run with an
+  unexpanded variable and committed at `c4eecbe`. Being tracked, they shipped even from
+  `git archive`. Not cosmetic: that path was the LONGEST entry in the archive at 116 characters, and
+  extracting the zip into a deep-but-legal destination failed outright with `FileNotFoundError`.
+  **Isolated before fixing rather than assumed** — extraction at a short root succeeded, so the
+  cause is the Windows path limit, not the braces in the filenames. Untracked, deleted, and
+  `.gitignore` now rejects that tree and three sibling unexpanded-variable names. Verified by
+  recreating the directory and confirming git reports nothing. Archive: 102 entries → **93**, junk
+  **9 → 0**, longest path **116 → 75** characters, and the extraction that failed now succeeds.
+  **2. The declared Python range promised interpreters the pins cannot resolve.** `requires-python`
+  was `>=3.11`, and all six SKILL.md files said "Requires Python 3.11+". Checked with
+  `pip download --only-binary=:all:` rather than trusting either document: `greenlet==3.0.3`
+  publishes no wheel for **3.13**, not 3.14 as the README claimed, and `lxml==5.3.0` none for 3.14.
+  A reviewer on 3.13 — current stable — would silently fall back to a source build needing a C
+  toolchain. Now `>=3.11,<3.13`, so pip refuses up front and says why; README and all six
+  compatibility strings corrected. The pins were NOT relaxed: they are what make the recorded
+  scores reproducible.
+  **3. `--allow-external` was a documented capability that did nothing.** It reached
+  `diagnostics.external_lookup` and stopped there, while `external_corroboration` was hardcoded
+  `None` and no Wikidata request existed anywhere in the tree. Four shipped artifacts described it
+  as working — the entity SKILL.md compatibility line and body, the orchestrator's help text, the
+  marketplace manifest, and the crawl-artifact schema — while PLAN §14 lists it under NICE TO HAVE,
+  i.e. never built. Same defect class as the `skills-ref` command that did not exist and the
+  User-Agent contact URL, both fixed earlier for the same reason: a claim a reader will trust and
+  the code cannot honour. The flag is removed and now rejected explicitly; every claim is corrected;
+  the dead `external_lookup` block in `scoring-config.json`, read by nothing, is deleted.
+  `diagnostics.external_lookup` stays as a constant `false` disclosing that all evidence is on-page.
+  **The pinned validator earned its keep again.** My first rewrite of the entity compatibility line
+  contained an unquoted `": "`, which YAML reads as a mapping. `agentskills validate` failed the
+  skill immediately; a text-only review would have shipped a skill whose frontmatter does not parse.
+  Reworded, and all six validate again.

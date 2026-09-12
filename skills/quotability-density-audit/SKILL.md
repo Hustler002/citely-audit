@@ -2,7 +2,7 @@
 name: quotability-density-audit
 description: Diagnoses RAG quotability (mechanic 2) and information-density / summarizer-survival (mechanic 3). Use as part of the brand AI-readiness audit, over rendered HTML from the shared crawl artifact. Flags vague marketing prose that AI won't cite and key facts diluted by filler that summarizers drop.
 license: Apache-2.0
-compatibility: Requires Python 3.11+. No network access.
+compatibility: Requires Python 3.11 or 3.12 (the pinned greenlet and lxml publish no wheels beyond 3.12). No network access.
 metadata:
   mechanic: "2+3"
   category: quotability

@@ -2,7 +2,7 @@
 name: engagement-orientation-audit
 description: Diagnoses first-viewport orientation and visitor retention (mechanic 5). Use as part of the brand AI-readiness audit, over the rendered DOM from the shared crawl artifact. Detects a missing above-the-fold value proposition, heading, or CTA that makes AI-referred visitors bounce.
 license: Apache-2.0
-compatibility: Requires Python 3.11+. No network access.
+compatibility: Requires Python 3.11 or 3.12 (the pinned greenlet and lxml publish no wheels beyond 3.12). No network access.
 metadata:
   mechanic: "5"
   category: engagement-orientation

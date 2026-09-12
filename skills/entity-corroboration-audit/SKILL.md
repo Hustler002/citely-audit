@@ -2,7 +2,7 @@
 name: entity-corroboration-audit
 description: Diagnoses entity disambiguation and cross-web corroboration failures (mechanic 4). Use as part of the brand AI-readiness audit, over the shared crawl artifact. Detects missing schema.org/JSON-LD entity graphs and sameAs/Wikidata mappings that cause AI hallucination or mistaken-identity.
 license: Apache-2.0
-compatibility: Requires Python 3.11+. On-page analysis needs no network. Optional --allow-external enables a soft-fail Wikidata lookup requiring outbound HTTPS.
+compatibility: Requires Python 3.11 or 3.12 (the pinned greenlet and lxml publish no wheels beyond 3.12). Needs no network at all, because every verdict is read from the shared crawl artifact.
 metadata:
   mechanic: "4"
   category: entity-corroboration
@@ -15,9 +15,9 @@ Extracts and evaluates the page's structured-data entity graph.
 ## Inputs
 - `--artifact <crawl_artifact.json>` or `--html-file <page.html>`.
 - `--config <scoring-config.json>`.
-- The optional Wikidata corroboration lookup runs in the **orchestrator's fetch stage**, not here.
-  It arrives pre-fetched as `external_corroboration` in the artifact. This analyzer has **zero**
-  network access, with no exceptions.
+- This analyzer has **zero** network access, with no exceptions. The artifact declares an
+  `external_corroboration` slot for a third-party lookup performed in the orchestrator's fetch
+  stage; no such lookup is implemented, so it is always null and nothing here depends on it.
 
 ## Output
 - JSON array of **check states** on stdout (see `references/check-result-schema.json`): one
@@ -27,9 +27,8 @@ Extracts and evaluates the page's structured-data entity graph.
 ## Checks
 - Extract JSON-LD, Open Graph, and microdata; require an `Organization`/`Person`-class entity.
 - Check for `sameAs` and Wikidata/social mappings (cross-web corroboration).
-- **Optional external corroboration** (`--allow-external` only): a Wikidata lookup that is
-  **soft-fail** — it never blocks or crashes the audit, respects the SSRF/timeout guards, and any
-  finding derived from it is labeled `confidence: heuristic`. This is the single sanctioned exception
-  to the "orchestrator owns all network I/O" rule.
+- Authority is judged from the links the page itself publishes. There is **no external lookup**:
+  every verdict rests on evidence observed on the audited pages, which is what makes the same page
+  produce the same verdict every time.
 
 Thresholds from `config/scoring-config.json` → `entity_corroboration`.

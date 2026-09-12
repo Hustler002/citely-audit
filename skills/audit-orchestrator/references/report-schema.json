@@ -248,7 +248,8 @@
           "type": "boolean"
         },
         "external_lookup": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether any third-party corroboration lookup contributed to this report. Always false: none is implemented, and no flag can enable one. Disclosed so a consumer knows every piece of evidence here was observed on the audited pages themselves."
         },
         "checks_evaluated": {
           "type": "integer",

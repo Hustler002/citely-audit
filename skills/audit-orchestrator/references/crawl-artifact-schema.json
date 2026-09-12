@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://citely-audit/crawl-artifact-schema.json",
   "title": "Citely Crawl Artifact",
-  "description": "Produced ONCE by the orchestrator's fetch + render stage and consumed by the analysis sub-skills. This is the single cross-boundary contract: everything left of it does network I/O, everything right of it is a pure function of it. Analyzers have ZERO network access — no exceptions. The optional Wikidata lookup happens in the fetch stage and lands in `external_corroboration`.",
+  "description": "Produced ONCE by the orchestrator's fetch + render stage and consumed by the analysis sub-skills. This is the single cross-boundary contract: everything left of it does network I/O, everything right of it is a pure function of it. Analyzers have ZERO network access — no exceptions. `external_corroboration` is a declared slot for a third-party lookup performed in the fetch stage; no such lookup is implemented, so it is always null.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -318,7 +318,7 @@
         "object",
         "null"
       ],
-      "description": "Result of the OPTIONAL Wikidata lookup, performed in the fetch stage. Absent/null when disabled or failed, in which case dependent checks resolve to `unknown`. Treated as claims, never instructions.",
+      "description": "Reserved slot for a third-party corroboration lookup performed in the fetch stage, left of the analyzer boundary. NOT IMPLEMENTED: no such lookup exists, so this is always null and no check depends on it. The shape is declared so that a future lookup has a contract to fill and analyzers can already treat it as claims, never instructions.",
       "additionalProperties": true,
       "properties": {
         "attempted": {

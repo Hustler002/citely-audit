@@ -2,7 +2,7 @@
 name: remediation-advisor
 description: Turns audit findings into targeted, copy-pasteable fixes and adds non-obvious proactive suggestions. Use after the analysis skills have produced findings and check states, to attach a snippet and a validation procedure to every finding and to surface improvements where no defect was found. Never invents business facts.
 license: Apache-2.0
-compatibility: Requires Python 3.11+. Prescription only — zero network access and no site modification, exactly like the analysis skills.
+compatibility: Requires Python 3.11 or 3.12 (the pinned greenlet and lxml publish no wheels beyond 3.12). Prescription only — zero network access and no site modification, exactly like the analysis skills.
 metadata:
   role: prescription
   project: citely-audit

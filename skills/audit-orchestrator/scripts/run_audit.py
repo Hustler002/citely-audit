@@ -489,7 +489,7 @@ def _assert_no_ssrf_bypass_via_cli(parser) -> None:
 
 # --- main ---------------------------------------------------------------------------------------
 def audit(url: str | None, html_file: str | None, config: dict, *,
-          allow_external: bool = False, force_tier: str | None = None) -> dict:
+          force_tier: str | None = None) -> dict:
     started = time.monotonic()
     deadline = fetch_mod.deadline_from_config(config, started)
     errors: list = []
@@ -619,7 +619,11 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
             "language_supported": language_supported,
             "user_agent": artifact.get("user_agent", ""),
             "robots_checked": bool((artifact.get("robots") or {}).get("checked")),
-            "external_lookup": bool(allow_external),
+            # Always false: no external corroboration lookup is implemented. PLAN §14 lists the
+            # Wikidata lookup under NICE TO HAVE and it was never built, so the field discloses to
+            # a consumer that every piece of evidence in this report came from the audited pages
+            # themselves. It is NOT a setting — there is no flag that can make it true.
+            "external_lookup": False,
             "advisor": advice.get("diagnostics") or {},
             "checks_evaluated": sum(1 for r in resolved.values() if r.state != scoring.UNKNOWN),
             "checks_unknown": sum(1 for r in resolved.values() if r.state == scoring.UNKNOWN),
@@ -687,8 +691,12 @@ def main(argv=None) -> int:
     source.add_argument("--url", help="Homepage URL to audit.")
     source.add_argument("--html-file", help="Local HTML file to audit offline (no network).")
     parser.add_argument("--config", default=str(CONFIG_PATH))
-    parser.add_argument("--allow-external", action="store_true",
-                        help="Permit the optional Wikidata corroboration lookup.")
+    # There is deliberately NO --allow-external flag. It existed for nine phases and did nothing:
+    # it reached `diagnostics.external_lookup` and stopped there, while `external_corroboration`
+    # was hardcoded to None and no Wikidata request was ever issued. A flag that advertises a
+    # capability the code does not have is worse than an absent one, because a reviewer who passes
+    # it is told the lookup ran. PLAN §14 lists it under NICE TO HAVE; if it is ever built, the
+    # artifact already declares the `external_corroboration` slot for its result.
     parser.add_argument("--ci", action="store_true",
                         help="Exit non-zero when any critical finding is present.")
     _assert_no_ssrf_bypass_via_cli(parser)
@@ -710,8 +718,7 @@ def main(argv=None) -> int:
     # stray `print()` can put a byte in front of the JSON.
     with stdout_reserved_for_report() as report_stream:
         try:
-            report = audit(args.url, args.html_file, config,
-                           allow_external=args.allow_external)
+            report = audit(args.url, args.html_file, config)
         except Exception as exc:
             # Belt and braces: the stages already trap their own failures, but the entrypoint must
             # still emit something valid rather than a traceback.

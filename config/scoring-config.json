@@ -154,15 +154,6 @@
       "en"
     ]
   },
-  "external_lookup": {
-    "_note": "Wikidata corroboration runs in the orchestrator's fetch stage (left of the artifact boundary), never inside an analyzer. Off by default.",
-    "enabled": false,
-    "allowed_domains": [
-      "wikidata.org",
-      "www.wikidata.org"
-    ],
-    "timeout_s": 5
-  },
   "render": {
     "_note": "Tier A = real Chromium render. Tier B = browserless SPA heuristic when no browser is available. Disclosed via diagnostics.render_mode. Chromium is provisioned as a SETUP step, never inside the timed run.",
     "viewport_width": 1280,

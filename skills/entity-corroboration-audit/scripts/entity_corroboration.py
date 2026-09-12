@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """entity-corroboration-audit (mechanic 4) — can an AI tell WHO this page is about, unambiguously?
 
-Pure consumer of the crawl artifact. ZERO network access, no exceptions. The optional Wikidata
-lookup lives in the orchestrator's fetch stage (left of the artifact boundary) and arrives here
-pre-fetched as `external_corroboration`.
+Pure consumer of the crawl artifact. ZERO network access, no exceptions. Authority is judged from
+the links the page itself publishes; there is no external lookup anywhere in this project. The
+artifact declares an `external_corroboration` slot for one, performed in the orchestrator's fetch
+stage if it is ever built, but none is implemented and no check here reads it.
 
 Usage:
   python entity_corroboration.py --artifact crawl_artifact.json [--config config/checks.json]

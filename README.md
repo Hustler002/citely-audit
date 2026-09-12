@@ -109,7 +109,10 @@ pip install -e ".[dev]"
 python -m playwright install chromium
 ```
 
-Python 3.12 is recommended: the pinned `lxml` and `greenlet` publish no wheels for 3.14.
+**Python 3.11 or 3.12 is required**, and `pyproject.toml` enforces it rather than leaving it to be
+discovered. On 3.13 the pinned `greenlet` (a `playwright` dependency) publishes no wheel, and on 3.14
+neither `greenlet` nor `lxml` does; pip would fall back to a source build that needs a C toolchain.
+The pins are what make the recorded scores reproducible, so install 3.12 rather than relaxing them.
 
 ---
 

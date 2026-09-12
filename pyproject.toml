@@ -2,7 +2,21 @@
 name = "citely-audit"
 version = "0.1.0"
 description = "Agent Skill Marketplace auditing website AI-discoverability and on-site engagement."
-requires-python = ">=3.11"
+# 3.11 and 3.12 only, and the UPPER bound is the load-bearing half. It was ">=3.11", which promised
+# a working install on interpreters where the pins cannot resolve. Checked with
+# `pip download --only-binary=:all:` rather than by attempting an install and reading the wreckage:
+#
+#     python   lxml==5.3.0   greenlet==3.0.3 (via playwright)
+#     3.11     wheel         wheel
+#     3.12     wheel         wheel
+#     3.13     wheel         NONE
+#     3.14     NONE          NONE
+#
+# Without the bound, a reviewer on 3.13 — the current stable release — silently falls back to a
+# source build of greenlet, which needs a C toolchain and fails on a clean Windows machine. With it,
+# pip refuses up front and says why. The pins are not relaxed instead: they are what make the
+# recorded scores reproducible.
+requires-python = ">=3.11,<3.13"
 license = { text = "Apache-2.0" }
 
 # Pinned for reproducibility. Playwright is required only for Tier-A rendering

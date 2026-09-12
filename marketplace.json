@@ -26,7 +26,7 @@
       "id": "entity-corroboration-audit",
       "path": "skills/entity-corroboration-audit",
       "entrypoint": false,
-      "description": "Mechanic 4 — structured-data (JSON-LD/OG/microdata) entity-graph extraction and optional soft-fail Wikidata corroboration."
+      "description": "Mechanic 4 — structured-data (JSON-LD/OG/microdata) entity-graph extraction, plus sameAs and third-party-anchor analysis over the links the page itself publishes. No network access."
     },
     {
       "id": "engagement-orientation-audit",
