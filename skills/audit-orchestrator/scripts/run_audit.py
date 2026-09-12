@@ -122,6 +122,22 @@ ANALYZERS = [
 # set. Folding it into the fan-out would mean one loop pretending two contracts are the same one.
 ADVISOR = ("remediation-advisor", "advise.py")
 
+# How a child process's output is decoded. `text=True` alone decodes with
+# `locale.getpreferredencoding(False)` — cp1252 on a default Windows install — while we explicitly
+# tell the child to WRITE utf-8 via PYTHONIOENCODING. That mismatch has two failure modes, and the
+# quiet one is worse:
+#
+#   * SILENT CORRUPTION, the common case. Any non-ASCII evidence comes back mojibake: "café" as
+#     "cafÃ©", Devanagari as "à¤°à¤¾à¤œ…". The audit completes and the report is wrong.
+#   * A CRASH, when a byte lands on one of the five cp1252 has no mapping for (0x81, 0x8d, 0x8f,
+#     0x90, 0x9d). `subprocess`'s reader thread raises, the exception is swallowed, and `stdout`
+#     is left as None — which is how a Hindi page produced `TypeError: object of type 'NoneType'
+#     has no len()` and took the whole audit down.
+#
+# `errors="replace"` because this is the boundary holding page-derived bytes: a malformed sequence
+# must degrade one character, never kill the run.
+CHILD_TEXT = {"text": True, "encoding": "utf-8", "errors": "replace"}
+
 ANALYZER_TIMEOUT_S = 60
 ADVISOR_TIMEOUT_S = 30
 MAX_ANALYZER_STDOUT = 8 * 1024 * 1024
@@ -150,6 +166,36 @@ def _analyzer_env() -> dict:
     return env
 
 
+def forward_child_stderr(skill: str, raw) -> None:
+    """Relay a child's diagnostics, tagged, capped, and unable to kill the run.
+
+    Two hazards, both reachable on a non-English site. The stream may be None, because a decode
+    failure in `subprocess`'s reader thread is swallowed and leaves the attribute unset. And the
+    text may be unprintable on the parent's OWN stderr: a cp1252 console raises UnicodeEncodeError
+    on Devanagari, so merely forwarding a child's message could take the audit down. The child is
+    the component holding page-derived text, so neither may be fatal.
+    """
+    if not raw:
+        return
+    text = raw if isinstance(raw, str) else str(raw)
+    for line in text[:MAX_FORWARDED_STDERR].splitlines():
+        if line.strip():
+            _write_safely(sys.stderr, f"[{skill}] {line}\n")
+    if len(text) > MAX_FORWARDED_STDERR:
+        _write_safely(sys.stderr, f"[{skill}] ... stderr truncated at {MAX_FORWARDED_STDERR} chars\n")
+
+
+def _write_safely(stream, text: str) -> None:
+    """Write text the stream may not be able to encode, without ever raising."""
+    try:
+        stream.write(text)
+    except UnicodeEncodeError:
+        encoding = getattr(stream, "encoding", None) or "ascii"
+        stream.write(text.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+    except Exception:
+        pass
+
+
 def run_analyzer(skill: str, script: str, artifact_path: Path, errors: list,
                  deadline: float | None) -> list:
     """Invoke one analyzer skill as a subprocess and parse its check states.
@@ -170,8 +216,8 @@ def run_analyzer(skill: str, script: str, artifact_path: Path, errors: list,
     try:
         proc = subprocess.run(
             [sys.executable, str(path), "--artifact", str(artifact_path), "--config", str(CHECKS_PATH)],
-            capture_output=True, text=True, timeout=timeout, cwd=str(REPO_ROOT),
-            env=_analyzer_env(),
+            capture_output=True, timeout=timeout, cwd=str(REPO_ROOT),
+            env=_analyzer_env(), **CHILD_TEXT,
         )
     except subprocess.TimeoutExpired:
         errors.append({"stage": "analyze", "type": "timeout", "message": f"{skill}: exceeded {timeout}s"})
@@ -195,12 +241,13 @@ def run_analyzer(skill: str, script: str, artifact_path: Path, errors: list,
     if proc.returncode != 0:
         errors.append({"stage": "analyze", "type": "exit_code",
                        "message": f"{skill}: exited {proc.returncode}"})
-    if len(proc.stdout) > MAX_ANALYZER_STDOUT:
+    stdout = proc.stdout or ""
+    if len(stdout) > MAX_ANALYZER_STDOUT:
         errors.append({"stage": "analyze", "type": "oversized_output", "message": skill})
         return []
 
     try:
-        rows = json.loads(proc.stdout or "[]")
+        rows = json.loads(stdout or "[]")
     except json.JSONDecodeError:
         errors.append({"stage": "analyze", "type": "bad_json",
                        "message": f"{skill}: stdout was not valid JSON"})
@@ -240,8 +287,8 @@ def run_advisor(workdir: Path, artifact_path: Path, findings: list, resolved: di
             [sys.executable, str(path), "--artifact", str(artifact_path),
              "--findings", str(findings_path), "--check-states", str(states_path),
              "--config", str(CHECKS_PATH)],
-            capture_output=True, text=True, timeout=timeout, cwd=str(REPO_ROOT),
-            env=_analyzer_env(),
+            capture_output=True, timeout=timeout, cwd=str(REPO_ROOT),
+            env=_analyzer_env(), **CHILD_TEXT,
         )
     except subprocess.TimeoutExpired:
         errors.append({"stage": "advise", "type": "timeout", "message": f"{skill}: exceeded {timeout}s"})
@@ -259,12 +306,13 @@ def run_advisor(workdir: Path, artifact_path: Path, findings: list, resolved: di
     if proc.returncode != 0:
         errors.append({"stage": "advise", "type": "exit_code",
                        "message": f"{skill}: exited {proc.returncode}"})
-    if len(proc.stdout) > MAX_ANALYZER_STDOUT:
+    stdout = proc.stdout or ""
+    if len(stdout) > MAX_ANALYZER_STDOUT:
         errors.append({"stage": "advise", "type": "oversized_output", "message": skill})
         return dict(EMPTY_ADVICE)
 
     try:
-        advice = json.loads(proc.stdout or "{}")
+        advice = json.loads(stdout or "{}")
     except json.JSONDecodeError:
         errors.append({"stage": "advise", "type": "bad_json",
                        "message": f"{skill}: stdout was not valid JSON"})
@@ -601,6 +649,31 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
     }
 
 
+def write_report(report: dict, stream) -> None:
+    """Emit the report as UTF-8, whatever the console happens to be set to.
+
+    RFC 8259: JSON for interchange SHALL be encoded in UTF-8, so emitting UTF-8 is correct rather
+    than merely convenient. A default Windows console is cp1252 and raises UnicodeEncodeError on
+    any script it has no mapping for, which would mean an audit that ran perfectly and then died
+    while printing its own result.
+
+    Reconfiguring the stream is preferred, because it produces real UTF-8 bytes that a consumer
+    redirecting to a file receives losslessly. Where the stream cannot be reconfigured — a pytest
+    capture object, a plain StringIO — every non-ASCII character is escaped instead. That output is
+    still valid JSON and still lossless; it is simply less pleasant to read.
+    """
+    escaped = False
+    try:
+        stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError, OSError):
+        declared = (getattr(stream, "encoding", "") or "").lower().replace("-", "")
+        escaped = declared not in ("utf8", "")
+
+    json.dump(report, stream, indent=2, ensure_ascii=escaped)
+    stream.write("\n")
+    stream.flush()
+
+
 def validate_report(report: dict) -> list:
     """Schema-validate and check the invariant the schema cannot express."""
     problems = []
@@ -661,9 +734,7 @@ def main(argv=None) -> int:
         for problem in validate_report(report):
             log.error("report validation: %s", problem)
 
-    json.dump(report, report_stream, indent=2, ensure_ascii=False)
-    report_stream.write("\n")
-    report_stream.flush()
+    write_report(report, report_stream)
 
     if args.ci and report.get("summary", {}).get("critical", 0) > 0:
         return 1

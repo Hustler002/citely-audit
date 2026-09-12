@@ -83,8 +83,8 @@
       "suggested_action": {
         "summary": "Server-render or pre-render the page so its key facts are present in the initial HTML, before any JavaScript runs.",
         "priority": "critical",
-        "target": "your rendering setup (server-side rendering or prerendering) â€” not the markup",
-        "validation": "Run `curl -sS file://tests/fixtures/broken_page.html | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix â€” no markup change reproduces it."
+        "target": "your rendering setup (server-side rendering or prerendering) — not the markup",
+        "validation": "Run `curl -sS file://tests/fixtures/broken_page.html | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix — no markup change reproduces it."
       },
       "id": "F-001"
     },
@@ -122,8 +122,8 @@
       "category": "ai_discoverability",
       "why_it_matters": "Crawlers that do not execute JavaScript see an empty shell. Facts that only appear after hydration are invisible to them, so nothing is quotable or citable.",
       "do": "Server-render or pre-render the page so its key facts are present in the initial HTML, before any JavaScript runs.",
-      "where": "your rendering setup (server-side rendering or prerendering) â€” not the markup",
-      "confirm": "Run `curl -sS file://tests/fixtures/broken_page.html | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix â€” no markup change reproduces it.",
+      "where": "your rendering setup (server-side rendering or prerendering) — not the markup",
+      "confirm": "Run `curl -sS file://tests/fixtures/broken_page.html | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix — no markup change reproduces it.",
       "score_gain": 6.0
     },
     {

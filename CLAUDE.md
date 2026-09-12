@@ -221,6 +221,17 @@ PowerShell terminal needs none of this.**
   because the highest shares in the corpus belong to hubspot (62.8%), MDN (51.9%) and w3.org (32%),
   all of which publish a proper `main` or `article`. Tuning on a single example is the
   fit-to-fixtures failure this project keeps punishing. Revisit only with more nav-only sites.
+- **Every stream boundary is explicitly UTF-8, never the platform locale** (added 2026-09-12).
+  `subprocess.run(text=True)` decodes with `locale.getpreferredencoding(False)` — cp1252 on a
+  default Windows install — while we tell the child to WRITE utf-8 via `PYTHONIOENCODING`. That
+  mismatch had two failure modes and the quiet one was worse: **silent corruption** of every
+  non-ASCII evidence string ("café" arriving as "cafÃ©"), and a **crash** whenever a byte landed on
+  one of the five cp1252 cannot map (0x81, 0x8d, 0x8f, 0x90, 0x9d). The crash is indirect: the
+  reader thread's exception is swallowed, `stdout` is left as `None`, and `len(None)` kills the run
+  after all the work is done. All child reads now go through `CHILD_TEXT`, and `errors="replace"`
+  is load-bearing because this boundary carries page-derived bytes. The report write and the
+  child-stderr forward are hardened the same way: an audit must not die while printing its own
+  result, nor while relaying a child's message.
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
@@ -312,7 +323,7 @@ PowerShell terminal needs none of this.**
 
 ## Current status: ALL TEN PHASES COMPLETE — **compliance signed off mechanically**
 
-**1032 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**1052 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -746,7 +757,7 @@ python tests/run_precision_recall.py                                            
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 1032 passed, 0 skipped
+pytest -q                                                                                  # 1052 passed, 0 skipped
 for s in skills/*/; do skills-ref validate "$s"; done                                      # Phase 10, not installed yet
 ```
 
