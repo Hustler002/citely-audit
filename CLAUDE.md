@@ -207,6 +207,20 @@ PowerShell terminal needs none of this.**
   a separate field, **empty by default**, appended as ` (+URL)` only when set. The agent is composed
   in one place so the product token the robots parser matches on cannot drift from the string
   actually sent. Guarded by a test rejecting every reserved documentation domain.
+- **A signal is graded by exactly one check** (added 2026-09-12). `extraction.semantic_html` used to
+  grade h1 count alongside landmarks, while `content.heading_hierarchy` owns heading structure and
+  already requires exactly one h1. A missing h1 was therefore charged in TWO categories, and no
+  suppression edge could catch it: suppression follows a dependency chain, and these are unrelated
+  checks in different categories that happened to read the same signal. The landmark check now
+  grades landmarks and nothing else. Measured benefit beyond tidiness: eff.org publishes a real
+  `article` landmark and two h1s, and was being marked down on LANDMARKS for a heading defect.
+- **`nav` still earns partial credit, on evidence** (decided 2026-09-12). It looked wrong that a
+  page marking up only its chrome escapes `fail`. A 32-site survey says leave it alone: nav-only
+  occurs **once in 32** (the audited site itself), the "content stuffed in the nav" pathology occurs
+  **zero** times, and the obvious rule — penalise a high share of text inside `nav` — is disproved,
+  because the highest shares in the corpus belong to hubspot (62.8%), MDN (51.9%) and w3.org (32%),
+  all of which publish a proper `main` or `article`. Tuning on a single example is the
+  fit-to-fixtures failure this project keeps punishing. Revisit only with more nav-only sites.
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
@@ -298,7 +312,7 @@ PowerShell terminal needs none of this.**
 
 ## Current status: ALL TEN PHASES COMPLETE — **compliance signed off mechanically**
 
-**1030 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**1032 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -732,7 +746,7 @@ python tests/run_precision_recall.py                                            
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 1030 passed, 0 skipped
+pytest -q                                                                                  # 1032 passed, 0 skipped
 for s in skills/*/; do skills-ref validate "$s"; done                                      # Phase 10, not installed yet
 ```
 
@@ -1316,3 +1330,25 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   reference validator; corpus recall and precision both 100%; a live `python.org` audit scores 94,
   validates against the schema, holds the mandated floor invariant, and completes in 37s of the
   300s budget with `CitelyAuditBot/0.1` on the wire.
+- 2026-09-12 — **External validation against avpws.com: one defect fixed, one deliberately not.**
+  Test count 1030 → **1032**.
+  **Fixed — a missing h1 was charged twice.** `extraction.semantic_html` graded h1 count alongside
+  landmarks while `content.heading_hierarchy` already owned it, so the same absence cost the site in
+  both AI discoverability and AI comprehension. Suppression could never have caught this: it follows
+  a dependency chain, and these are unrelated checks in different categories reading one signal. The
+  landmark check now grades landmarks only. On avpws.com its measurement went from
+  `landmarks=nav; h1_count=0` to `landmarks=nav`, and only the heading check still cites h1.
+  **Not changed — whether `nav` alone should earn partial credit.** Surveyed 32 real sites across
+  two batches. Nav-only appears **once** (avpws itself), the hypothesised pathology of content
+  living inside the nav appears **zero** times, and even avpws carries just 4.5% of its text in nav.
+  The obvious implementation is disproved outright: the highest nav shares belong to hubspot 62.8%,
+  MDN 51.9% and w3.org 32%, every one of which publishes a proper `main` or `article`, so a
+  nav-share rule would fire hardest on the best-structured sites in the corpus. Changing grading on
+  a sample of one is exactly the fit-to-fixtures failure mode this project has punished four times.
+  **Two corrections to my own earlier claims.** I said `fail` was unreachable for any site built
+  this century — wrong: Hacker News, example.com and canva.com all reach it, because they carry no
+  landmarks at all. And my first survey read **gzip bytes as text**, since urllib does not
+  decompress and some servers gzip regardless of Accept-Encoding; it therefore reported python.org
+  and Hacker News as having no landmarks and no h1. Re-run with decompression, python.org has
+  `header,nav,footer,section` and five h1s — matching what our own tool reported all along.
+  Verified: 1032 tests, corpus recall and precision still 100%, avpws.com still scores 91.

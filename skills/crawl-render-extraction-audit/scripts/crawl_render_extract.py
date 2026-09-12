@@ -358,20 +358,30 @@ def check_semantic_html(page, url) -> dict:
         return result("extraction.semantic_html", "unknown", page_url=url,
                       reason="HTML parser unavailable")
 
+    # This check grades LANDMARKS only. It deliberately does not look at h1 any more.
+    #
+    # It used to require exactly one h1 to pass, and to accept any h1 as partial credit. That made
+    # a missing h1 cost the site twice, in two different categories: once here under AI
+    # discoverability and once in `content.heading_hierarchy` under AI comprehension, which is the
+    # check that actually owns heading structure and already tests for exactly one h1. Two findings
+    # for one root cause is the double-jeopardy defect this project removed on 2026-09-10, and no
+    # suppression edge could catch it because the two checks sit in different categories.
+    #
+    # Measured on a 32-site corpus, the separation also fixes a real misgrading: eff.org publishes
+    # a proper `article` landmark and two h1s, and was being marked down on LANDMARKS for what is
+    # purely a heading defect. It now passes here and is still reported by the heading check.
     landmarks = [t for t in ("main", "article", "header", "nav") if soup.find(t)]
-    h1s = soup.find_all("h1")
     has_primary = bool(soup.find("main") or soup.find("article"))
-    single_h1 = len(h1s) == 1
 
-    measurement = f"landmarks={','.join(landmarks) or 'none'}; h1_count={len(h1s)}"
-    if has_primary and single_h1:
+    measurement = f"landmarks={','.join(landmarks) or 'none'}"
+    if has_primary:
         return result("extraction.semantic_html", "pass", measurement=measurement, page_url=url,
-                      evidence=f"Primary content landmark present with exactly one h1 ({measurement})")
-    if landmarks or h1s:
+                      evidence=f"Primary content landmark present ({measurement})")
+    if landmarks:
         return result("extraction.semantic_html", "partial", measurement=measurement, page_url=url,
-                      evidence=f"Partial semantic structure: {measurement}")
+                      evidence=f"Partial semantic structure, no main or article landmark: {measurement}")
     return result("extraction.semantic_html", "fail", measurement=measurement, page_url=url,
-                  evidence="No semantic landmarks and no h1 — extractors cannot tell content from chrome")
+                  evidence="No semantic landmarks at all — extractors cannot tell content from chrome")
 
 
 # A content hash, a UUID or a bare row id is an ASSET FINGERPRINT, not a fact. Every modern build

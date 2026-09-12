@@ -144,6 +144,50 @@ def test_injected_instructions_never_reach_the_report_as_instructions():
     assert report["summary"]["discoverability_score"] < 100
 
 
+def test_a_missing_h1_is_reported_once_not_once_per_category():
+    """One root cause must not be charged twice.
+
+    `extraction.semantic_html` (AI discoverability) used to grade h1 count alongside landmarks,
+    while `content.heading_hierarchy` (AI comprehension) owns heading structure and already
+    requires exactly one h1. A page with no h1 was therefore penalised in two categories, and no
+    suppression edge could catch it because suppression works within a dependency chain, not across
+    two unrelated checks that happen to read the same signal.
+
+    Asserted on div soup, which has no h1 and no landmarks, so both checks certainly fire.
+    """
+    report = PR.audit_fixture("archetype_div_soup.html")
+    by_check = {f["check_id"]: f for f in report["findings"]}
+
+    assert "content.heading_hierarchy" in by_check, "the heading check must still own the h1"
+    assert "h1" in json.dumps(by_check["content.heading_hierarchy"]).lower()
+
+    landmark = by_check.get("extraction.semantic_html")
+    assert landmark is not None, "div soup must still fail on landmarks"
+    blob = json.dumps({k: v for k, v in landmark.items() if k != "suggested_action"}).lower()
+    assert "h1" not in blob, f"the landmark check is still grading headings: {landmark['measurement']}"
+
+
+def test_the_landmark_check_grades_landmarks_and_nothing_else():
+    """A page with a real content landmark passes even with a heading defect.
+
+    eff.org publishes an `article` landmark and two h1s. Under the old rule the second h1 blocked
+    the landmark pass, marking the site down for a heading problem under a discoverability check.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "skills" / "crawl-render-extraction-audit" / "scripts"))
+    import crawl_render_extract as CRE  # noqa: E402
+
+    two_h1_with_article = ("<html lang='en'><body><article><h1>One</h1><h1>Two</h1>"
+                           "<p>Body copy.</p></article></body></html>")
+    page = {"raw": {"html": two_h1_with_article}}
+    assert CRE.check_semantic_html(page, "u")["state"] == "pass"
+
+    nav_only = "<html lang='en'><body><nav><a href='/'>Home</a></nav><div>Copy.</div></body></html>"
+    assert CRE.check_semantic_html({"raw": {"html": nav_only}}, "u")["state"] == "partial"
+
+    nothing = "<html lang='en'><body><div>Copy.</div></body></html>"
+    assert CRE.check_semantic_html({"raw": {"html": nothing}}, "u")["state"] == "fail"
+
+
 # =================================================================================================
 # Absorbed from the deleted Phase-1 scaffold stubs
 # =================================================================================================

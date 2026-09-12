@@ -119,14 +119,15 @@
       "requires_language": false,
       "threshold": null,
       "title": "Semantic HTML landmarks present",
-      "signal": "Presence of main/article/header/nav landmarks and a single h1",
+      "signal": "Presence of main/article/header/nav landmarks delimiting content from chrome",
       "impact": "Semantic structure tells extractors which text is primary content versus navigation and boilerplate.",
       "plain_summary": "Your page structure marks out what the main content is.",
-      "remediation": "Wrap the primary content in a <main> or <article> element and give the page exactly one <h1>, so extractors can tell content from navigation.",
+      "remediation": "Wrap the primary content in a <main> or <article> element, so extractors can tell content from navigation and boilerplate.",
       "failure_title": "Semantic HTML landmarks are missing",
       "failure_summary": "Nothing marks out which part of the page is the main content.",
       "partial_title": "Semantic HTML landmarks are incomplete",
-      "partial_summary": "Your page structure only partly marks out the main content."
+      "partial_summary": "Your page structure only partly marks out the main content.",
+      "_h1_note": "Heading structure is deliberately NOT graded here. `content.heading_hierarchy` owns it and already requires exactly one h1; grading it in both places charged a missing h1 twice, in two different categories, which no suppression edge could catch."
     },
     {
       "id": "extraction.facts_not_image_only",
