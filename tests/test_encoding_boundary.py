@@ -156,6 +156,47 @@ def test_forwarding_handles_a_missing_stream():
     RA.forward_child_stderr("some-skill", "")
 
 
+@pytest.mark.parametrize("stage", ["analyze", "advise"])
+def test_the_real_call_sites_forward_through_the_hardened_path(monkeypatch, tmp_path, stage):
+    """The helper above is worth nothing while the callers keep their own copy of the old loop.
+
+    It was written, unit-tested and then not wired in: `run_analyzer` and `run_advisor` each still
+    forwarded through a bare `sys.stderr.write`, which is the exact call that raises here. The
+    helper passed its own test the whole time, so a green suite said nothing about the audit.
+
+    This drives the CALLERS rather than the helper, because that is the gap. Testing a helper
+    directly can only ever prove the helper works.
+    """
+    class Child:
+        returncode = 0
+        stdout = "[]" if stage == "analyze" else "{}"
+        stderr = "राजभाषा विभाग: child warning\n"
+
+    monkeypatch.setattr(RA.subprocess, "run", lambda *a, **k: Child())
+    monkeypatch.setattr(RA.sys, "stderr",
+                        io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict"))
+    artifact = tmp_path / "a.json"
+    artifact.write_text("{}", encoding="utf-8")
+
+    if stage == "analyze":
+        RA.run_analyzer(*RA.ANALYZERS[0], artifact, [], None)
+    else:
+        RA.run_advisor(tmp_path, artifact, [], {}, [], None)
+
+
+def test_no_caller_keeps_its_own_copy_of_the_forwarding_loop():
+    """Both callers must route through one implementation, or one of them regresses alone.
+
+    Asserted on the source because the behavioural test above can only see the paths it drives,
+    and a third subprocess call added later would reintroduce the defect unseen.
+    """
+    source = (SCRIPTS / "run_audit.py").read_text(encoding="utf-8")
+    assert source.count("forward_child_stderr(skill, proc.stderr)") == 2, (
+        "a call site is not forwarding through the hardened path")
+    assert "sys.stderr.write(f\"[{skill}]" not in source, (
+        "a caller still writes a child's text straight to a stream that may not encode it")
+
+
 # =================================================================================================
 # Writing the report
 # =================================================================================================

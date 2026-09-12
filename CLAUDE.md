@@ -323,7 +323,7 @@ PowerShell terminal needs none of this.**
 
 ## Current status: ALL TEN PHASES COMPLETE — **compliance signed off mechanically**
 
-**1052 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**1055 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -757,8 +757,8 @@ python tests/run_precision_recall.py                                            
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 1052 passed, 0 skipped
-for s in skills/*/; do skills-ref validate "$s"; done                                      # Phase 10, not installed yet
+pytest -q                                                                                  # 1055 passed, 0 skipped
+for s in skills/*/; do agentskills validate "$s"; done                                     # all six skills, pinned in the dev extra
 ```
 
 Each analyzer skill is also independently runnable, which is what makes the folders agentskills.io
@@ -1363,3 +1363,35 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   and Hacker News as having no landmarks and no h1. Re-run with decompression, python.org has
   `header,nav,footer,section` and five h1s — matching what our own tool reported all along.
   Verified: 1032 tests, corpus recall and precision still 100%, avpws.com still scores 91.
+- 2026-09-12 — **Encoding boundaries made UTF-8 end to end** (reported as "the audit crashes on a
+  Hindi site"). Treating that as a language problem would have produced a patch for Devanagari and
+  left the defect in place: the cause is `subprocess.run(text=True)` decoding with the platform
+  locale while we tell the child to WRITE utf-8, so it bites on any character outside cp1252.
+  Two failure modes, and the quiet one is worse — silent mojibake in every non-ASCII evidence
+  string, and a crash when a byte lands on one of the five cp1252 cannot map, which arrives
+  indirectly as `len(None)` after the audit has done all its work. All child reads now share
+  `CHILD_TEXT`; the report write and the child-stderr forward are hardened the same way.
+  `tests/test_encoding_boundary.py` drives real subprocesses and real streams, because a mock
+  would have agreed with the broken code. Committed as `796e6e0`.
+- 2026-09-12 — **The stderr hardening was written and then not wired in.** Found by auditing the
+  commit above against its own claim rather than against its test run. `forward_child_stderr` and
+  `_write_safely` existed, were unit-tested and passed — while `run_analyzer` and `run_advisor`
+  each kept their own copy of the old loop, forwarding through a bare `sys.stderr.write`, which is
+  the exact call that raises on a cp1252 console. So the locked decision above described a
+  protection the audit did not have.
+  **Confirmed by driving the real call sites before changing anything**, since the helper passing
+  its own test proves only that the helper works: with a child emitting Devanagari on stderr and a
+  strict cp1252 parent stream, both functions raised `UnicodeEncodeError`. Both now route through
+  the one implementation, which also gives the advisor the truncation notice only the analyzer had.
+  **The gap was invisible to a green suite**, which is the point worth recording: the existing
+  source guard asserted `CHILD_TEXT` reached both subprocess calls and said nothing about what
+  happened to the decoded text afterwards. Pinned two ways — a behavioural test per call site, and
+  a source guard requiring both to forward through the helper with no caller keeping a private
+  copy. Mutation-verified: reverting one call site fails both new tests, and the untouched call
+  site's case still passes, so the test discriminates between them rather than firing on any edit.
+  Verified: **1055 tests, 0 skipped** — 1052 plus exactly the three added, so nothing else moved.
+  **Fixed two stale lines in this file's own run instructions while here**, both of which Phase 10
+  had already corrected in the README and pinned with a test that only ever read the README: the
+  validator was documented as `skills-ref validate`, a command that does not exist, and annotated
+  "not installed yet" when it has been pinned in the dev extra since Phase 10. Re-run to confirm
+  rather than assumed — all six skills report `Valid skill` under `agentskills validate`.

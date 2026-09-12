@@ -231,12 +231,7 @@ def run_analyzer(skill: str, script: str, artifact_path: Path, errors: list,
     # were being swallowed entirely rather than reaching the operator. Forward them, tagged and
     # capped: they are the only diagnostic a failing analyzer produces, but the child is also the
     # component holding page-derived text, so it does not get an unbounded channel.
-    if proc.stderr:
-        for line in proc.stderr[:MAX_FORWARDED_STDERR].splitlines():
-            if line.strip():
-                sys.stderr.write(f"[{skill}] {line}\n")
-        if len(proc.stderr) > MAX_FORWARDED_STDERR:
-            sys.stderr.write(f"[{skill}] ... stderr truncated at {MAX_FORWARDED_STDERR} chars\n")
+    forward_child_stderr(skill, proc.stderr)
 
     if proc.returncode != 0:
         errors.append({"stage": "analyze", "type": "exit_code",
@@ -298,10 +293,7 @@ def run_advisor(workdir: Path, artifact_path: Path, findings: list, resolved: di
                        "message": f"{skill}: {type(exc).__name__}"})
         return dict(EMPTY_ADVICE)
 
-    if proc.stderr:
-        for line in proc.stderr[:MAX_FORWARDED_STDERR].splitlines():
-            if line.strip():
-                sys.stderr.write(f"[{skill}] {line}\n")
+    forward_child_stderr(skill, proc.stderr)
 
     if proc.returncode != 0:
         errors.append({"stage": "advise", "type": "exit_code",
