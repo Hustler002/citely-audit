@@ -1,6 +1,6 @@
-"""Phase 1 — scoring spine tests.
+"""Scoring spine tests.
 
-Covers the properties PLAN.md §11 requires of the capability model: determinism, dependency
+Covers the properties the capability model must hold: determinism, dependency
 suppression, the anti-dodge rule, unknown-excluded-from-denominator, bounds, monotonicity, i18n
 gating, and the mandated summary invariant.
 """
@@ -41,7 +41,8 @@ def test_registry_loads_and_validates(registry):
 
 
 def test_every_category_has_equal_check_count(registry):
-    """Engagement must sit at parity with discoverability (rubric: 'across both')."""
+    """Engagement sits at parity with discoverability: a visitor who bounces off a correct AI
+    citation is as much a failure as never being cited at all."""
     counts = {c: len(registry.by_category(c)) for c in registry.categories}
     assert set(counts.values()) == {6}, counts
 
@@ -283,7 +284,7 @@ def test_blocked_before_fetch_overrides_supplied_results(registry, config):
 
 # --- i18n gating ------------------------------------------------------------------------------
 def test_unsupported_language_yields_unknown_never_fail(registry, config):
-    """The v2 defect: English-only heuristics must not fail non-English sites."""
+    """English-only heuristics must not fail a non-English site."""
     results = results_all(registry, S.FAIL)
     resolved = S.resolve_states(results, registry, config, language_supported=False)
     lang_checks = [c.id for c in registry.checks.values() if c.requires_language]

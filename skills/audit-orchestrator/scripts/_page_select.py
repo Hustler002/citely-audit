@@ -3,10 +3,10 @@
 
 Picks which pages an audit covers: the homepage always, then a small sample of additional pages.
 
-Selection is STRUCTURAL, never lexical. PLAN.md §8 forbids assuming URL conventions, so we do not
-look for /about, /faq, /contact or any other word. Those matches are English-only and would silently
-degrade every non-English site to homepage-only — the same class of bug as the English-only content
-heuristics. Instead we rank by two signals that behave identically in any language:
+Selection is STRUCTURAL, never lexical: we do not look for /about, /faq, /contact or any other
+word. Those matches are English-only and would silently degrade every non-English site to
+homepage-only, the same class of bug as an English-only content heuristic. Instead we rank by two
+signals that behave identically in any language:
 
   1. Membership of the homepage's primary navigation (the site's own statement of what matters).
   2. Shallow URL path depth (/pricing outranks /blog/2024/03/some-post).

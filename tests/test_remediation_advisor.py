@@ -1,4 +1,4 @@
-"""Phase 7 — remediation-advisor.
+"""The remediation-advisor skill.
 
 The advisor is the only skill whose output a reader is expected to PASTE INTO THEIR SITE, which
 changes what these tests have to prove. It is not enough that it produces plausible text:
@@ -8,7 +8,7 @@ changes what these tests have to prove. It is not enough that it produces plausi
   * a snippet containing a value the page never stated would be published as fact, so the
     substitution rule is asserted in both directions — observed values appear, unobserved ones stay
     literal and are reported;
-  * a proactive suggestion repeating a finding is the 2026-09-10 double-jeopardy defect wearing a
+  * a proactive suggestion repeating a finding reports one root cause twice, wearing a
     new hat, so suppression is asserted per detector rather than in aggregate;
   * proactive items must not be able to move the score or the counts, which is a property of the
     whole pipeline and is therefore tested through the orchestrator, not the unit.
@@ -445,7 +445,7 @@ def test_no_template_exists_for_a_check_that_does_not():
 
 
 def test_every_corrective_template_says_where_to_make_the_change():
-    """PLAN §7 requires the exact target: a selector OR a file location hint.
+    """Every corrective action must name where to make the change: a selector OR a file location hint.
 
     Measured before building it: across five fixtures, only 12 of 23 findings carried a selector,
     because roughly half of all findings are an ABSENCE. A missing meta tag has no element to point
@@ -484,7 +484,8 @@ def test_every_detector_in_the_template_has_code_and_an_order_slot():
 
 
 def test_the_authority_anchor_example_was_not_built_as_a_detector():
-    """PLAN §7's second example became the scored check `entity.sameas_authority`. Building it here
+    """A detector for a missing authority anchor would duplicate the scored check
+    `entity.sameas_authority`. Building it here
     too would report one root cause twice. Asserted so a future reader working from PLAN's list
     does not helpfully re-add it."""
     assert "entity.sameas_authority" in REGISTRY
@@ -505,7 +506,7 @@ def test_malformed_artifacts_degrade_instead_of_raising(artifact):
 
 
 def test_pages_as_a_dict_does_not_raise():
-    """Regression shape from the 2026-09-06 hardening: a replayed artifact with `pages` as a dict
+    """A replayed or hand-written artifact with `pages` as a dict
     raised AttributeError in all four analyzers."""
     advise_direct({"pages": {"homepage": {}}})
 
@@ -580,7 +581,7 @@ def test_recommendations_never_enter_the_finding_counts():
 
 
 def test_the_advisor_cannot_change_the_score():
-    """Phase 7 is additive by construction. If this ever fails, prescription has leaked into
+    """The advisor is additive by construction. If this ever fails, prescription has leaked into
     scoring and the determinism guarantee is gone."""
     import run_audit as RA
     config = load(REPO_ROOT / "config" / "scoring-config.json")
@@ -651,12 +652,9 @@ def test_the_manifest_matches_the_shape_the_brief_documents():
     assert sum(1 for s in manifest["skills"] if s.get("entrypoint")) == 1
 
 
-# The two README drift tests that used to live here moved to tests/test_compliance.py in Phase 10,
-# which is where marketplace and README compliance belongs. The replacements are strictly stronger:
-# they check every skill by the `id` the manifest actually uses rather than by a path table the
-# README no longer has, they also require the composition and the entrypoint to be described, and
-# they cover Phases 7, 8 and 9 rather than Phase 7 alone. Keeping both copies would have meant two
-# places to update and one of them going stale — which is the failure this pair existed to prevent.
+# README drift is asserted in tests/test_compliance.py, where marketplace and README compliance
+# belongs, rather than here. Two copies would have meant two places to update and one of them
+# going stale, which is the exact failure such a guard exists to prevent.
 
 
 def test_the_skill_name_matches_its_folder():

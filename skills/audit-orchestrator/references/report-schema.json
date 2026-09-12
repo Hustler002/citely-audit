@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://citely-audit/report-schema.json",
   "title": "Citely Audit Report",
-  "description": "Superset of the mandatory schema floor. Every floor field (site, audited_at, summary{total_findings,critical,high,medium}, findings[]{id,title,severity,evidence,suggested_action{summary,priority}}) is REQUIRED here and must never be removed. All v3 additions are additive.",
+  "description": "Superset of the mandatory schema floor. Every floor field (site, audited_at, summary{total_findings,critical,high,medium}, findings[]{id,title,severity,evidence,suggested_action{summary,priority}}) is REQUIRED here and must never be removed. Everything beyond the floor is additive.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -51,7 +51,7 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 100,
-          "description": "The OVERALL score. Name retained from v1 for backward compatibility."
+          "description": "The OVERALL score, kept under this name so existing consumers keep working; per-category scores sit alongside it in category_scores."
         },
         "category_scores": {
           "type": "object",
@@ -134,11 +134,11 @@
         "verdict": {
           "type": "string",
           "minLength": 1,
-          "description": "PLAN §9 layer 1: the headline in one plain sentence, no undefined jargon. Chosen from config/checks.json by score band, so report wording has one home."
+          "description": "The headline in one plain sentence, with no undefined jargon. Chosen from config/checks.json by score band, so report wording has one home."
         },
         "headline_reliable": {
           "type": "boolean",
-          "description": "False when coverage is below the floor (0.5). §9.1: a score built on a minority of the evidence is a statement about the checks that were measurable, not about the site, and must not be presented as a verdict. Carried in the data so every consumer honours it, not just a renderer."
+          "description": "False when coverage is below the floor (0.5). A score built on a minority of the evidence is a statement about the checks that were measurable, not about the site, and must not be presented as a verdict. Carried in the data so every consumer honours it, not just a renderer."
         },
         "headline_caveat": {
           "type": [
@@ -490,7 +490,7 @@
     },
     "next_actions": {
       "type": "array",
-      "description": "PLAN §9 layer 2: the same findings ordered by points recoverable, answering do / where / confirm / gain. A ranked VIEW, not a second copy — findings[] is ordered by severity so F-001… stay stable between runs, so it cannot also carry the ROI ordering.",
+      "description": "The same findings ordered by points recoverable, answering do / where / confirm / gain. A ranked VIEW, not a second copy — findings[] is ordered by severity so F-001… stay stable between runs, so it cannot also carry the ROI ordering.",
       "items": {
         "type": "object",
         "additionalProperties": true,

@@ -279,7 +279,7 @@ def test_the_double_critical_shape_is_resolved_without_suppressing_anything():
 
     The reported fix was to suppress the second check when the first fails. Measured, that costs
     24 points of coverage to gain 5 of score, and it reinstates the collateral damage removed on
-    2026-09-08, where one verified failure wiped 44% of the category. Demoting the partial instead
+    an earlier change, where one verified failure wiped 44% of the category. Demoting the partial instead
     keeps both findings, keeps full coverage, and leaves the score untouched.
     """
     declared = REGISTRY["entity.organization_declared"]["severity"]

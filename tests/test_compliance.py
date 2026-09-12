@@ -1,7 +1,7 @@
-"""Phase 10 — compliance and sign-off.
+"""Compliance and sign-off.
 
-Every gate in PLAN.md's Verification section, asserted mechanically rather than checked once by hand
-and written down. A sign-off that lives in a document decays the moment the code moves.
+Every release gate is asserted mechanically here rather than checked once by hand and written
+down. A sign-off that lives in a document decays the moment the code moves.
 
 Two layers deliberately cover the same ground:
 
@@ -25,6 +25,11 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
+
+# Working notes that may sit beside the marketplace during development but are not part of it.
+# Scans below skip them by name: they describe the project's history, so they legitimately mention
+# things the shipped code must no longer contain.
+WORKING_NOTES = ("CONTEXT.md", "PLAN.md", "CLAUDE.md")
 MANIFEST = json.loads((REPO_ROOT / "marketplace.json").read_text(encoding="utf-8"))
 SKILL_DIRS = sorted(p for p in SKILLS_DIR.iterdir() if p.is_dir())
 
@@ -146,14 +151,14 @@ def test_the_manifest_is_self_contained():
 
 
 # =================================================================================================
-# Sign-off gates from PLAN.md's Verification section
+# Release sign-off gates
 # =================================================================================================
 def test_the_legacy_project_name_survives_only_in_prose():
-    """The legacy project name must survive nowhere but the historical record.
+    """The project's former name must not survive anywhere in the shipped marketplace.
 
-    Permitted: CONTEXT.md, which preserves the original brief verbatim by design, and prose in the
-    planning documents that DESCRIBES the rename. Any hit in code, config or a schema means the
-    rename was left half-done.
+    A hit in code, config or a schema means the rename was left half-done, which is how two names
+    for one thing end up in front of a user. Working notes kept outside the marketplace are skipped
+    below, since they record the rename rather than depend on it.
     """
     # Assembled at runtime rather than written out, so this guard cannot match its OWN source and
     # report itself. An exclusion list would also work and would be worse: it would hide a genuine
@@ -172,7 +177,7 @@ def test_the_legacy_project_name_survives_only_in_prose():
             continue
         if needle not in text:
             continue
-        if path.name in ("CONTEXT.md", "PLAN.md", "CLAUDE.md"):
+        if path.name in WORKING_NOTES:
             continue
         offenders.append(str(path.relative_to(REPO_ROOT)))
     assert not offenders, f"legacy project name still in: {offenders}"
@@ -316,7 +321,7 @@ def test_the_readme_describes_every_skill_and_the_composition():
 
 
 def test_the_readme_does_not_advertise_finished_work_as_pending():
-    """It went stale twice — once when the sixth skill landed, once when Phase 9 finished. A README
+    """It has gone stale before, most recently when the sixth skill landed. A README
     that undersells a completed marketplace is a scored problem, not a cosmetic one."""
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8").lower()
     for phase, marker in ((7, "remediation-advisor"), (8, "_narrative.py"), (9, "labeled_corpus.json")):

@@ -1,10 +1,10 @@
 {
   "version": "1.0",
-  "_note": "Ground truth for the precision/recall harness (PLAN.md §6.3, §8). Labels are written from each fixture's CONSTRUCTION, never copied from what the auditor happens to output — a corpus recorded from the tool's own behaviour asserts nothing. When a run disagrees with a label, one of the two is wrong and the disagreement is the finding.",
+  "_note": "Ground truth for the precision/recall harness. Labels are written from each fixture's CONSTRUCTION, never copied from what the auditor happens to output — a corpus recorded from the tool's own behaviour asserts nothing. When a run disagrees with a label, one of the two is wrong and the disagreement is the finding.",
   "_fields": {
     "must_find": "check ids that MUST appear as findings. A miss here is a RECALL failure.",
-    "must_not_find": "check ids that must NOT appear as findings. A hit here is a FALSE POSITIVE — the rubric penalises these as hard as misses.",
-    "score_range": "[min, max] inclusive. Ranges, not exact numbers: PLAN §8 asks for sensible behaviour per archetype, and pinning exact scores would turn every legitimate improvement into a test failure.",
+    "must_not_find": "check ids that must NOT appear as findings. A hit here is a FALSE POSITIVE, which costs a reader more than a miss: it sends them to fix something that was never broken.",
+    "score_range": "[min, max] inclusive. Ranges, not exact numbers: what matters is sensible behaviour per archetype, and pinning exact scores would turn every legitimate improvement into a test failure.",
     "must_match": "optional — another fixture whose score and finding set this one must equal exactly."
   },
   "_not_covered_here": "The consent-wall / bot-challenge archetype is served by tests/fixture_server.py (/consent, /challenge) and asserted in test_artifact.py and test_resilience.py. It cannot live in this corpus because blocked-page detection happens during acquisition, and this harness audits local files where there is nothing to be blocked by.",
@@ -77,7 +77,7 @@
     },
     "broken_page.html": {
       "archetype": "client-rendered shell, dead bundles",
-      "why": "The dependency-suppression case from PLAN §6.3. One critical finding about the root cause, NOT a dozen downstream false positives about content that could never be measured.",
+      "why": "The dependency-suppression case. One critical finding about the root cause, NOT a dozen downstream false positives about content that could never be measured.",
       "must_find": ["render.content_without_js"],
       "must_not_find": [
         "content.title_descriptive", "content.meta_description", "content.scannable_blocks",
@@ -90,7 +90,7 @@
     },
     "spa_hydrating.html": {
       "archetype": "genuinely hydrating single-page app",
-      "why": "Raw HTML is a shell; the rendered DOM is not. Same suppression property as the dead shell, reached by a different route. Its score is high on very little evidence, which is the §9.1 case asserted in test_narrative.py.",
+      "why": "Raw HTML is a shell; the rendered DOM is not. Same suppression property as the dead shell, reached by a different route. Its score is high on very little evidence, which is the low-coverage headline case asserted in test_narrative.py.",
       "must_find": ["render.content_without_js"],
       "must_not_find": [
         "content.title_descriptive", "content.scannable_blocks",

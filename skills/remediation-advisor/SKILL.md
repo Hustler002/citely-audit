@@ -27,11 +27,11 @@ measures nothing: it consumes verdicts that already exist and answers the questi
 - Offline mode: `--html-file <page.html>` runs the proactive detectors alone against a local file,
   with no findings and no network. This is what makes the skill independently useful.
 
-> **Why it reads the artifact.** `PLAN.md` §5.2 originally justified this skill as consuming
-> "findings, not the artifact". That distinction is about **concern**, not inputs, and §7 makes the
-> artifact unavoidable: snippets must be filled from observed values, and every proactive detector
-> inspects the page. The skill still performs no detection of its own — it never emits a check state
-> and never influences the score.
+> **Why it reads the artifact.** What separates this skill from the analyzers is its **concern**,
+> not its inputs. Reading the page is unavoidable here: a snippet may only be filled from values
+> observed on the page, and every proactive detector has to inspect the page to know whether it
+> has anything to say. The skill still performs no detection of its own — it never emits a check
+> state and never influences the score.
 
 ## Output
 
@@ -82,9 +82,9 @@ places `recommendations` at the top level of the report.
 | `R:undated_claims` | Numeric claims with no date and no attribution anywhere on the page | — |
 | `R:image_facts_with_alt` | Numbers that exist only in image `alt` text, never in the body | `extraction.facts_not_image_only` finding |
 
-`PLAN.md` §7 listed a fifth example — an `Organization` with `sameAs` but no authority anchor. That
-became the scored check `entity.sameas_authority`, so building it here would report one root cause
-twice. It is deliberately **not** a detector; see the note in `PLAN.md` §7.
+A fifth candidate was considered and deliberately **not** built: an `Organization` carrying
+`sameAs` but no third-party anchor. That is already the scored check `entity.sameas_authority`,
+so a detector for it would report one root cause twice.
 
 Detectors that rely on word-level heuristics are **language-gated**: on a page whose language is
 undetected or unsupported they stay silent rather than guessing, for the same reason the

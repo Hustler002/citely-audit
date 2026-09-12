@@ -1,9 +1,9 @@
 {
   "version": "1.0",
-  "_note": "Proactive suggestions — the rubric's 'beyond-problem suggestions, relevant and non-obvious'. Each is wording only; the detector that decides whether it fires lives in scripts/advise.py, because a detector is code and a template is text. The quality bar from PLAN.md §7 is that a generic SEO checklist would NOT produce these: each names a mechanism specific to how answer engines ingest a page.",
+  "_note": "Proactive suggestions: improvements worth making where no defect was found. Each is wording only; the detector that decides whether it fires lives in scripts/advise.py, because a detector is code and a template is text. The quality bar is that a generic SEO checklist would NOT produce these: each names a mechanism specific to how answer engines ingest a page.",
   "_rules": {
     "not_findings": "These never enter findings[], are excluded from summary counts, and are never scored. They can neither inflate nor deflate the discoverability score.",
-    "no_double_reporting": "`suppressed_by` names a check whose FINDING makes this suggestion redundant. Telling a site to add FAQPage markup directly beneath a critical finding that it has no structured data at all is noise, and reporting one root cause twice is the defect fixed on 2026-09-10.",
+    "no_double_reporting": "`suppressed_by` names a check whose FINDING makes this suggestion redundant. Telling a site to add FAQPage markup directly beneath a critical finding that it has no structured data at all is noise, and it reports one root cause twice.",
     "language_gate": "`requires_language: true` means the detector uses word-level heuristics and must stay silent on a page whose language is undetected or unsupported, exactly as the language-dependent checks resolve to `unknown` rather than `fail`.",
     "parseable_snippets": "`snippet_json` marks a snippet that MUST still parse once its placeholders are filled: 'ld+json' means the application/ld+json block inside it, 'fragment' means the object body outside any script tag. Enforced by test_remediation_advisor.py, because a copy-paste fix that does not parse is worse than no fix at all."
   },

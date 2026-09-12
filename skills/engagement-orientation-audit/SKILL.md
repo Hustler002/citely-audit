@@ -26,5 +26,6 @@ Deterministic, reproducible heuristics over the rendered DOM — not subjective/
 - **Legibility proxies** — body font size / basic contrast from inline/computed styles when available.
 
 Thresholds from `config/scoring-config.json` → `engagement_orientation`.
-Determinism note: this replaces the original plan's "UX/visual reasoning" with measurable signals so
-runs are reproducible (plan §1 mistake #2).
+Determinism note: every signal here is a measurement — a pixel offset, a computed font size, an
+overlay area — never a judgement about how a page looks. Subjective "UX reasoning" cannot be
+reproduced by a second run, and an audit a reader cannot re-verify is not evidence.

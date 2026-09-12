@@ -163,5 +163,5 @@
     }
   ],
   "recommendations": [],
-  "_note": "GENERATED from tests/fixtures/broken_page.html (a client-rendered shell). Do not hand-edit; timestamps pinned so the committed file is stable. Findings carry the Phase-7 snippet and validation procedure. This page emits no proactive recommendations, which is correct: it has no FAQ, no images and no numeric claims, and a proactive suggestion that fires on every page is noise. Firing examples live in tests/fixtures/advisor_*.html."
+  "_note": "GENERATED from tests/fixtures/broken_page.html (a client-rendered shell). Do not hand-edit; timestamps pinned so the committed file is stable. Findings carry the advisor's snippet and validation procedure. This page emits no proactive recommendations, which is correct: it has no FAQ, no images and no numeric claims, and a proactive suggestion that fires on every page is noise. Firing examples live in tests/fixtures/advisor_*.html."
 }

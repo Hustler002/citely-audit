@@ -1,4 +1,4 @@
-"""Phase 3 — page selection, rendering, and artifact assembly.
+"""Page selection, rendering, and artifact assembly.
 
 Runs against the localhost fixture server, so the whole acquisition pipeline is exercised for real
 (sockets, redirects, robots, sitemaps) with zero external egress.
@@ -69,7 +69,8 @@ def test_normalize_strips_fragment():
 
 # --- Page selection is structural, not lexical --------------------------------------------------
 def test_selection_is_language_neutral(config):
-    """The core §8 guarantee: a non-English site must select just as many pages as an English one.
+    """The core language-neutrality guarantee: a non-English site must select just as many pages as
+    an English one.
 
     The old English keyword approach would have found zero extra pages here.
     """
@@ -473,12 +474,12 @@ def test_pages_are_not_skipped_while_the_budget_is_intact(config, server):
     assert not [p for p in artifact["pages"] if p["status"] == "skipped"]
 
 
-# --- Post-Phase-3 cleanup regressions ------------------------------------------------------------
+# --- Acquisition cleanup regressions -------------------------------------------------------------
 # Each test below pins a fix from the 8-issue cleanup. They exist because the original content-type
 # "fix" was inert and 211 green tests failed to notice — behaviour must be asserted, not assumed.
 
 def test_non_html_page_is_refused(config, server):
-    """PLAN.md §10 requires text/html only. Parsing JSON/PDF as HTML yields garbage findings."""
+    """Page content is restricted to text/html. Parsing JSON or PDF as HTML yields garbage findings."""
     artifact = A.build_artifact(f"{server}/not-html", config, force_tier=R.TIER_B)
     page = artifact["pages"][0]
     assert page["status"] == "error"
@@ -542,7 +543,7 @@ def test_unencoded_body_capped_without_content_length(config, server):
 
 
 def test_artifact_declares_all_emitted_fields(config, server):
-    """Guards schema drift: analyzers in Phase 4 depend on these keys being part of the contract."""
+    """Guards schema drift: the analyzers depend on these keys being part of the contract."""
     artifact = A.build_artifact(f"{server}/healthy", config, force_tier=R.TIER_B)
     declared = set(ARTIFACT_SCHEMA["properties"])
     assert set(artifact) - declared == set()

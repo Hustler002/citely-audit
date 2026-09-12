@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""The non-expert output layer (PLAN.md §9) — pure, no I/O, no LLM.
+"""The non-expert output layer — pure functions, no I/O, no language model.
 
-The brief's rubric asks for a report "a non-expert could act on", and grades the marketplace itself
-rather than any report it happens to produce. So this layer is part of the ENTRYPOINT'S SCHEMA, not
-a rendering step bolted on afterwards: a machine consumer piping the JSON gets the same plain
-reading as a person, and there is exactly one wording for both.
+The report has to be actionable by someone who is not an SEO engineer. That layer lives in the
+ENTRYPOINT'S SCHEMA rather than in a rendering step bolted on afterwards, so a machine consumer
+piping the JSON gets the same plain reading as a person, and there is exactly one wording for
+both rather than two that can disagree.
 
-Three depths, per §9:
+Three depths:
 
   1. `verdict` / `category_verdicts` — one plain sentence each, no undefined jargon.
   2. `next_actions` — the SAME findings, ordered by points recoverable, answering do / where /
@@ -17,7 +17,7 @@ Three depths, per §9:
 Every sentence comes from `config/checks.json`. Nothing here writes prose, because report wording
 living in one place is what has kept it from drifting across six skills.
 
-§9.1 — a score built on a minority of the evidence must not be presented as a verdict on the site.
+A score built on a minority of the evidence must not be presented as a verdict on the site.
 `headline_reliable` is computed here and carried in the report, so the rule is a property of the
 data rather than a convention each consumer is trusted to honour.
 """
@@ -53,7 +53,7 @@ def _verdict_from_bands(bands, score) -> str | None:
 def category_verdicts(cat_scores: dict, cat_coverage: dict, registry_categories: dict) -> dict:
     """One plain sentence per category, chosen by score AND by whether it can be trusted.
 
-    A category scoring 100.0 off a single surviving check is the defect §9.1 exists for. Its number
+    A category scoring 100.0 off a single surviving check is exactly what this guards against. Its number
     stays in the report — removing it would hide the measurement — but the SENTENCE says the
     category could not be assessed, because a confident sentence is what a reader actually acts on.
     """
@@ -91,7 +91,7 @@ def next_actions(findings: list, limit: int | None = None) -> list:
     means it cannot ALSO be ordered by return on effort. This is that second ordering, kept thin —
     it carries ids and the four things a non-expert needs, never a second copy of the evidence.
 
-    Ranked by `points_recoverable` (PLAN §7), with severity as the tie-break so two equal-value
+    Ranked by `points_recoverable`, with severity as the tie-break so two equal-value
     fixes still present the more serious one first, and the finding id last so the order is total
     and therefore reproducible.
     """

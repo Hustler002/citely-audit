@@ -5,7 +5,7 @@ Usage:
   python run_audit.py --url https://example.com
   python run_audit.py --html-file page.html          # offline, zero network
 
-Pipeline (PLAN.md §3):
+Pipeline:
   Input -> Safe Fetch -> Render -> Normalized Artifact -> Analysis -> Findings -> Scoring -> Report
            (this file owns ALL network I/O)          |  (pure subprocesses)          |
                                                      +-- single cross-boundary contract
@@ -373,7 +373,7 @@ def to_check_results(rows: list, registry, errors: list) -> list:
 def build_findings(resolved: dict, registry, config: dict, raw_registry: dict) -> list:
     """Turn failing checks into findings, using the registry as the single source of report wording.
 
-    Each finding carries the full reasoning chain the rubric asks for:
+    Each finding carries a complete reasoning chain, so a reader can retrace the verdict:
     signal -> measurement -> threshold -> evidence -> impact -> remediation.
     """
     findings = []
@@ -567,9 +567,9 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
             coverage_ratio=scoring.coverage(resolved, registry, config),
             cat_coverage=scoring.category_coverage(resolved, registry, config))
 
-        # --- the non-expert output layer (PLAN §9) -----------------------------------------
-        # Computed here, into the REPORT, not in a renderer: the brief grades the entrypoint's
-        # emitted schema, and a machine consumer piping the JSON deserves the same plain reading a
+        # --- the non-expert output layer ---------------------------------------------------
+        # Computed here, into the REPORT, not in a separate renderer, so a machine consumer
+        # piping the JSON gets the same plain reading a
         # person gets. Presentation only — it reads the scores, it never changes them.
         registry_categories = load_json(CHECKS_PATH).get("categories") or {}
         reason_text = registry_categories.get("reasons") or {}
@@ -619,10 +619,9 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
             "language_supported": language_supported,
             "user_agent": artifact.get("user_agent", ""),
             "robots_checked": bool((artifact.get("robots") or {}).get("checked")),
-            # Always false: no external corroboration lookup is implemented. PLAN §14 lists the
-            # Wikidata lookup under NICE TO HAVE and it was never built, so the field discloses to
-            # a consumer that every piece of evidence in this report came from the audited pages
-            # themselves. It is NOT a setting — there is no flag that can make it true.
+            # Always false: no third-party corroboration lookup is implemented, so this discloses
+            # that every piece of evidence in the report came from the audited pages themselves.
+            # It is NOT a setting — there is no flag that can make it true.
             "external_lookup": False,
             "advisor": advice.get("diagnostics") or {},
             "checks_evaluated": sum(1 for r in resolved.values() if r.state != scoring.UNKNOWN),
@@ -633,7 +632,7 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         "partial_reason": reason,
         "findings": findings,
         # The same findings ordered by what fixing them is worth. findings[] is ordered by severity
-        # so F-001… stay stable across runs, so it cannot also carry the ROI ranking §9 asks for.
+        # so F-001… stay stable across runs, which is why it cannot also carry the ROI ranking.
         "next_actions": narrative.next_actions(findings),
         "not_checked": narrative.what_could_not_be_checked(
             resolved, registry, cat_coverage, raw_registry, reason_text),
@@ -695,8 +694,8 @@ def main(argv=None) -> int:
     # it reached `diagnostics.external_lookup` and stopped there, while `external_corroboration`
     # was hardcoded to None and no Wikidata request was ever issued. A flag that advertises a
     # capability the code does not have is worse than an absent one, because a reviewer who passes
-    # it is told the lookup ran. PLAN §14 lists it under NICE TO HAVE; if it is ever built, the
-    # artifact already declares the `external_corroboration` slot for its result.
+    # it is told the lookup ran. If one is ever built, the crawl artifact already declares the
+    # `external_corroboration` slot for its result.
     parser.add_argument("--ci", action="store_true",
                         help="Exit non-zero when any critical finding is present.")
     _assert_no_ssrf_bypass_via_cli(parser)

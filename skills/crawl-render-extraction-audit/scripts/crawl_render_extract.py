@@ -364,8 +364,9 @@ def check_semantic_html(page, url) -> dict:
     # a missing h1 cost the site twice, in two different categories: once here under AI
     # discoverability and once in `content.heading_hierarchy` under AI comprehension, which is the
     # check that actually owns heading structure and already tests for exactly one h1. Two findings
-    # for one root cause is the double-jeopardy defect this project removed on 2026-09-10, and no
-    # suppression edge could catch it because the two checks sit in different categories.
+    # for one root cause is double jeopardy, and no suppression edge could catch it: suppression
+    # follows a dependency chain, and these are unrelated checks in two different categories that
+    # happened to read the same signal.
     #
     # Measured on a 32-site corpus, the separation also fixes a real misgrading: eff.org publishes
     # a proper `article` landmark and two h1s, and was being marked down on LANDMARKS for what is
@@ -446,7 +447,8 @@ def _is_ui_sized(img, minimum_px: int) -> bool:
 def check_facts_not_image_only(page, url, thresholds) -> dict:
     """Flag images that appear to carry factual content with no text equivalent.
 
-    Deliberately conservative (a statistical check per PLAN §6.3): an image is only suspicious when
+    Deliberately conservative, because this is a statistical signal rather than a certainty: an
+    image is only suspicious when
     its filename carries digits AND it has no usable alt text. Decorative imagery and properly
     described images are ignored, because a false 'your facts are trapped in pictures' finding on an
     unseen site is worse than a miss.

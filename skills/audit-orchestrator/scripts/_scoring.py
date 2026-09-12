@@ -5,9 +5,9 @@ PURE. No network, no rendering, no side effects. Given a set of raw check states
 produces category scores, an overall score, score confidence, deterministic finding ids, and the
 `points_recoverable` ranking that drives remediation priority.
 
-Design (PLAN.md §6) and why it replaces `100 - sum(penalty)`:
+Design, and why it replaces `100 - sum(penalty)`:
   * Bounded and comparable  — a weighted mean cannot run away as findings accumulate.
-  * No double counting      — dependency suppression collapses correlated failures (§6.3).
+  * No double counting      — dependency suppression collapses correlated failures.
   * Missing != negative     — `unknown` / `not_applicable` leave the DENOMINATOR entirely rather
                               than scoring zero, so an unmeasurable check lowers confidence, not score.
   * Confidence is explicit  — surfaced as `score_confidence` instead of silently shrinking numbers.
@@ -332,7 +332,7 @@ def category_scores(
     """Weighted mean over APPLICABLE checks only. None when a category had nothing measurable.
 
     None is deliberate and must not be coerced to 0.0 — "we could not measure this" and
-    "this scored zero" are different claims, and conflating them is exactly the flaw in v1.
+    "this scored zero" are different claims, and a penalty model conflates them.
     """
     credits = config["state_credits"]
     excluded = set(config.get("excluded_states", [UNKNOWN, NOT_APPLICABLE]))

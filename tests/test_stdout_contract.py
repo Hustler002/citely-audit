@@ -160,7 +160,7 @@ def _scripts_defining_configure_logging():
 
     This was a hardcoded list of five modules under a docstring promising it covered EVERY skill.
     Adding a sixth skill would have left the promise false and the new skill unguarded — the same
-    way `test_embedded_thresholds_match_registry` silently missed both Phase-5 analyzers while this
+    way `test_embedded_thresholds_match_registry` silently missed two analyzers while this
     project's notes claimed drift was caught by tests. Globbing cannot go stale.
     """
     found = []

@@ -481,7 +481,7 @@ def test_known_good_fixtures_are_unmoved(name):
 
 
 def test_embedded_thresholds_match_registry_for_the_parity_analyzers():
-    """Extends the Phase-4 drift guard to the two Phase-5 analyzers, which it never covered.
+    """Extends the threshold-drift guard to the comprehension and orientation analyzers.
 
     Each skill is self-contained by design, so its embedded defaults are a real second copy of the
     registry values and can drift from them silently.

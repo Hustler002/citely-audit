@@ -1,4 +1,4 @@
-"""Phase 1 — schema contract tests.
+"""Schema contract tests.
 
 Guards the two cross-boundary contracts: the report schema (public output) and the crawl-artifact
 schema (orchestrator -> analyzers). The most important property is that the MANDATED FLOOR from the
@@ -111,7 +111,7 @@ def test_bad_finding_id_pattern_rejected(report_schema):
         Draft202012Validator(report_schema).validate(report)
 
 
-# --- v3 additive fields ------------------------------------------------------------------------
+# --- Fields added above the mandated floor -------------------------------------------------------
 def test_full_v3_report_validates(report_schema):
     report = minimal_report()
     report["summary"].update({

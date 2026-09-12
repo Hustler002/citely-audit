@@ -94,7 +94,7 @@
     },
     "pages": {
       "type": "array",
-      "description": "One entry per audited page. The homepage is always index 0. v1 caps this at max_pages (default 5); the cap is a budget-derived maximum, not a guarantee.",
+      "description": "One entry per audited page. The homepage is always index 0. Capped at max_pages (default 5); the cap is a budget-derived maximum, not a guarantee.",
       "minItems": 1,
       "items": {
         "type": "object",
@@ -114,7 +114,7 @@
               "homepage",
               "other"
             ],
-            "description": "Only these two are emitted. Semantic roles (about/product/faq) were removed: guessing them from URL words is the English-only lexical assumption PLAN.md §8 forbids."
+            "description": "Only these two are emitted. Semantic roles (about/product/faq) were removed: guessing them from URL words assumes English URL conventions and silently degrades every non-English site."
           },
           "status": {
             "type": "string",

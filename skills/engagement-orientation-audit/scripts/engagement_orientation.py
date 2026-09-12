@@ -320,8 +320,8 @@ def _role_of(tag) -> str:
 def chrome_kind(tag) -> str | None:
     """`"nav"`, `"banner"`, `"floating"` or None — landmarks and ARIA roles only.
 
-    Deliberately not class or id based: PLAN §8 forbids framework and CMS allowlists, and
-    `class="header"` means whatever the author wanted it to mean.
+    Deliberately not class or id based. A framework or CMS allowlist only ever fits the sites it
+    was written against, and `class="header"` means whatever the author wanted it to mean.
     """
     role = _role_of(tag)
     if tag.name in NAV_TAGS or role in NAV_ROLES:
@@ -684,7 +684,8 @@ def check_value_proposition(geometry, html, url, thresholds) -> dict:
     # SPECIFICITY is the primary signal. Requiring a word from an 18-noun list failed "Emergency
     # lock repair across Leeds" at high severity while passing example.com, which offers nothing at
     # all — the list simply had no entry for locksmithing, and could never hold every trade on the
-    # web. Vocabulary is kept, but as extra positive evidence only, per PLAN §8.
+    # web. Vocabulary is kept, but as extra positive evidence only: a word missing from the list
+    # can never cause a failure.
     anchored = bool(_ANCHOR_NUMBER_RE.search(text)) or has_proper_noun(text)
     found_verbs = [v for v in verbs if re.search(r"\b" + re.escape(v) + r"\w*\b", lowered)]
     found_nouns = [n for n in nouns if re.search(r"\b" + re.escape(n) + r"s?\b", lowered)]
@@ -724,8 +725,8 @@ def check_value_proposition(geometry, html, url, thresholds) -> dict:
         return result("orientation.value_proposition", "pass", measurement=measurement,
                       page_url=url, reason=note,
                       evidence=f"Headline area names something specific: {heading_text}")
-    # Readable, no filler, but nothing concrete. Partial, not fail: PLAN §8 prefers the softer call
-    # near a boundary, and this check is heuristic and language-gated.
+    # Readable, no filler, but nothing concrete. Partial rather than fail, because this check is
+    # heuristic and language-gated, and a borderline call should take the softer verdict.
     return result("orientation.value_proposition", "partial", measurement=measurement,
                   page_url=url, reason=note,
                   evidence=f"Headline area is readable but names nothing specific: {heading_text}")

@@ -57,7 +57,7 @@
               "string",
               "null"
             ],
-            "description": "Where to make the change, in words — the file-or-element hint PLAN.md §7 requires. Always present, because an absent meta tag has no selector to point at."
+            "description": "Where to make the change, in words — a file-or-element hint. Always present, because an absent meta tag has no selector to point at."
           }
         }
       }
@@ -110,7 +110,7 @@
           "rationale": {
             "type": "string",
             "minLength": 1,
-            "description": "Why this is non-obvious and worth doing. The rubric rewards beyond-problem suggestions that a generic SEO checklist would not produce, so the reasoning is part of the deliverable."
+            "description": "Why this is non-obvious and worth doing. A suggestion a generic SEO checklist would also produce is not worth a reader's attention, so the reasoning is part of the deliverable."
           },
           "evidence": {
             "type": [

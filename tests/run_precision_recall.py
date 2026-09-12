@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Precision and recall against tests/labeled_corpus.json (PLAN.md §6.3, §8).
+"""Precision and recall against tests/labeled_corpus.json.
 
     python tests/run_precision_recall.py            # the table, for a human
     python tests/run_precision_recall.py --json     # machine-readable
     pytest tests/test_corpus.py                     # the same numbers, as a CI gate
 
-The rubric penalises misses and false positives equally, and they pull in opposite directions, so
-measuring only one of them is worse than measuring neither — it makes a tool that never reports
+Misses and false positives matter equally and pull in opposite directions, so measuring only one
+of them is worse than measuring neither — it makes a tool that never reports
 anything look excellent. Both are counted here against labels written from each fixture's
 construction rather than from the tool's own output.
 

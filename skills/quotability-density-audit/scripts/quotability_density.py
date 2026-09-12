@@ -12,7 +12,8 @@ Output: a JSON array of CHECK STATES on stdout (see references/check-result-sche
 i18n is built in, not retrofitted: two of the six checks are language-dependent and use English
 vocabulary. They run ONLY when the page declares a supported language, and otherwise resolve to
 `unknown` — never `fail`. Judging a German page with English heuristics would produce a wall of
-false positives, which the rubric penalises exactly as hard as misses.
+false positives, and a false alarm costs a reader more than a miss: it sends them to fix
+something that was never broken.
 
 The four structural checks (title, meta description, heading hierarchy, scannable blocks) are
 language-independent and always run.

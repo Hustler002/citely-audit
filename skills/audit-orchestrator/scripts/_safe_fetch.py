@@ -6,7 +6,7 @@ network access, so every URL-safety concern is centralized in this one module.
 
 Threat model: the URL is attacker-influenced and the response is hostile input.
 
-Defences (PLAN.md §10):
+Defences:
   * Scheme allowlist; URL userinfo rejected; port allowlist.
   * Every resolved A/AAAA record validated against private / loopback / link-local / reserved /
     multicast / ULA / IPv4-mapped-IPv6 ranges and the cloud metadata IP 169.254.169.254.
@@ -120,7 +120,7 @@ class FetchResult:
 
 @dataclass
 class RobotsResult:
-    """Robots outcome, split into the two concerns PLAN.md §6.3.1 keeps separate."""
+    """Robots outcome, split into two concerns that must never be conflated."""
     checked: bool = False
     status: int | None = None
     # (1) Operational gate: may OUR auditor fetch? Never scored.
@@ -516,7 +516,7 @@ def check_robots(base_url: str, config: dict, *, deadline: float | None = None) 
     if fetched.error is not None:
         out.checked = False
         out.error = fetched.error
-        out.audit_allowed = False   # conservative: unreachable != permitted (PLAN §6.3.1)
+        out.audit_allowed = False   # conservative: unreachable != permitted
         # ...but record WHY. Without this the caller cannot tell "the site refuses crawlers" from
         # "we could not reach robots.txt", and would report the former about a site it never read.
         out.unreachable = True

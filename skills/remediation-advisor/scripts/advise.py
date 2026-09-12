@@ -20,7 +20,8 @@ Three rules hold this together, and each exists because its absence produced a r
   1. Never invent a business fact  — the report is read as authoritative; a fabricated address in a
      copy-paste snippet would be published verbatim.
   2. Never report one root cause twice — a proactive item is suppressed when its related check
-     already produced a finding. This is the 2026-09-10 double-jeopardy defect in a new place.
+     already produced a finding. Telling a reader to fix something they have already been told
+     is noise, and it double-counts one defect.
   3. Proactive items are not findings — they live in recommendations[], outside summary counts and
      outside scoring, so they can neither inflate nor deflate the score.
 """
@@ -61,8 +62,8 @@ MAX_SNIPPET = 4000
 # Detector order is fixed, so R-001… is deterministic and repeat runs are byte-identical.
 DETECTOR_ORDER = ("R:faq_schema", "R:facts_in_prose", "R:undated_claims", "R:image_facts_with_alt")
 
-# Thresholds are deliberately conservative (PLAN.md §8): a proactive suggestion that fires on every
-# page is noise, and silence costs nothing because these are not findings.
+# Thresholds are deliberately conservative: a proactive suggestion that fires on every page is
+# noise, and silence costs nothing, because these are suggestions rather than findings.
 DEFAULT_THRESHOLDS = {
     "R:faq_schema": {"min_pairs": 2, "min_answer_chars": 40},
     "R:facts_in_prose": {"min_stranded": 4},
@@ -246,8 +247,9 @@ def meta_content(soup, *, name: str | None = None, prop: str | None = None) -> s
 
 
 # --- Observed values ------------------------------------------------------------------------
-# The hard rule from PLAN.md §7: a snippet value is either observed here or stays a literal
-# placeholder. Nothing in this function guesses, derives or completes a business fact.
+# The hard rule: a snippet value is either observed on the page here, or it stays a literal
+# placeholder. Nothing in this function guesses, derives or completes a business fact, because
+# a snippet is meant to be pasted in unmodified.
 
 def observed_values(artifact, soup) -> dict:
     values: dict[str, str] = {}

@@ -1,13 +1,12 @@
-"""Phase 8 — the non-expert output layer (PLAN.md §9).
+"""The non-expert output layer.
 
-The brief grades "the marketplace itself … not any single report it happens to produce", and its
-Output-design row asks whether the entrypoint **is built to emit** a report a non-expert could act
-on. So the plain-language layer is part of the emitted SCHEMA, and these tests assert it there
-rather than against any rendered view.
+The plain-language layer lives in the emitted report rather than in a separate renderer, so that a
+machine consumer piping the JSON gets the same plain reading a person does and there is one
+wording rather than two that can disagree. These tests assert it there.
 
 Three properties carry the weight:
 
-  * **§9.1 — a score built on a minority of the evidence must not read as a verdict on the site.**
+  * **A score built on a minority of the evidence must not read as a verdict on the site.**
     Asserted on the two JavaScript shells, which are the whole reason the rule exists.
   * **The layer is presentation only.** If adding it ever moves a score, the scoring spine has been
     contaminated and the determinism guarantee is gone.
@@ -51,11 +50,11 @@ def run_audit(fixture, timeout=300):
 
 
 # =================================================================================================
-# §9.1 — low coverage must suppress the headline
+# Low coverage must suppress the headline
 # =================================================================================================
 @pytest.mark.parametrize("fixture,score", [("spa_hydrating.html", 80), ("broken_page.html", 30)])
 def test_a_javascript_shell_never_presents_its_score_as_a_verdict(fixture, score):
-    """The acceptance criterion PLAN §9.1 was written against.
+    """The acceptance criterion for withholding a headline.
 
     Both fixtures leave 82.5% of the check weight unmeasurable, and they score 80 and 30 off the
     same handful of survivors — which is the point: at this coverage the number carries no
@@ -89,7 +88,8 @@ def test_a_category_scoring_100_off_one_check_does_not_claim_to_be_fine():
 def test_a_well_measured_site_keeps_its_headline():
     """The gate must cost confidence only where confidence is unearned.
 
-    Without this, suppressing every headline would 'pass' §9.1 while making the report useless.
+    Without this, suppressing every headline would satisfy the rule above while making the report
+    useless.
     """
     report = run_audit("healthy_page.html")
     summary = report["summary"]
@@ -135,7 +135,7 @@ def test_a_fully_measured_site_reports_no_gaps():
 # The layer is presentation only
 # =================================================================================================
 def test_the_output_layer_cannot_change_the_score():
-    """Phase 8 is additive by construction, exactly as Phase 7 was. If this fails, a presentation
+    """The narrative layer is additive by construction. If this fails, a presentation
     concern has reached the scoring spine and determinism is gone."""
     import run_audit as RA
     config = load(REPO_ROOT / "config" / "scoring-config.json")
@@ -162,7 +162,7 @@ def test_next_actions_is_a_view_of_findings_and_never_a_new_one():
 
 
 def test_next_actions_is_ordered_by_what_the_fix_is_worth():
-    """PLAN §7 ranks fixes by points recoverable rather than by opinion, and §9 layer 2 presents
+    """Fixes are ranked by points recoverable rather than by opinion, and the plain-language layer presents
     that ordering. findings[] cannot carry it: its order is fixed so F-001… stay stable."""
     report = run_audit("advisor_faq_unmarked.html")
     gains = [a["score_gain"] for a in report["next_actions"]]
@@ -179,7 +179,7 @@ def test_points_recoverable_outranks_severity():
     the fourth time this project has caught a test passing for the wrong reason. This case is built
     so the two orderings DISAGREE, which is the only shape that can tell them apart.
 
-    PLAN §7 ranks fixes by what fixing them is worth, not by how alarming they sound.
+    Fixes are ranked by what fixing them is worth, not by how alarming they sound.
     """
     findings = [{"id": "F-001", "severity": "critical", "points_recoverable": 5.0},
                 {"id": "F-002", "severity": "medium", "points_recoverable": 20.0}]

@@ -1,4 +1,4 @@
-"""Phase 2 — security corpus for the safe acquisition layer.
+"""Security corpus for the safe acquisition layer.
 
 Every test here encodes an attack the fetch layer must refuse. The SSRF cases matter most: Citely
 fetches attacker-influenced URLs, so a bypass turns the audit into a probe of the operator's
@@ -480,7 +480,7 @@ def test_malformed_robots_does_not_crash(monkeypatch, config):
 # --- NAT64 (found by a real run on an IPv6-only network) -------------------------------------------
 # books.toscrape.com resolved to 64:ff9b::23d3:7a6d, a NAT64 address embedding the PUBLIC IPv4
 # 35.211.122.109. The guard rejected it as "non-public", making every website unreachable on such a
-# network. The original Phase 2 analysis tested NAT64 only with PRIVATE embedded addresses, saw them
+# network. An earlier analysis tested NAT64 only with PRIVATE embedded addresses, saw them
 # blocked, and wrongly concluded the prefix was "covered".
 
 @pytest.mark.parametrize("addr,embedded", [
@@ -529,7 +529,7 @@ def test_nat64_helper_extracts_the_right_address():
 def test_unreachable_robots_is_flagged_as_unreachable(monkeypatch, config):
     """A network failure must not be reported as 'the site disallows crawlers'.
 
-    The audit is still refused (conservative, PLAN §6.3.1) — but the recorded CAUSE differs, so the
+    The audit is still refused, conservatively — but the recorded CAUSE differs, so the
     report cannot claim a site blocks crawlers when robots.txt was never read.
     """
     monkeypatch.setattr(F, "safe_get", lambda url, cfg, **k: F.FetchResult(
