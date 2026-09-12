@@ -174,6 +174,86 @@ def test_a_large_chart_among_small_icons_is_still_judged():
     assert "4" in str(row["measurement"])
 
 
+# -------------------------------------------------------------------------------------------------
+# An inline asset has no filename, and its payload is not evidence
+#
+# Same defect family as the fingerprint rule above, one layer earlier: the fingerprint fix made the
+# NAME harder to satisfy, while `data:` URLs have no name at all. `urlparse(src).path` on a data URL
+# returns its base64 payload, and splitting that on "/" — a character in the base64 alphabet —
+# yields a random chunk carrying both letters and digits, which is exactly the shape the rule reads
+# as `revenue-2024`. Found on a government homepage with a single inline PNG.
+# -------------------------------------------------------------------------------------------------
+def _inline_png(seed: int, size: int = 900) -> str:
+    import base64
+    import random
+    return "data:image/png;base64," + base64.b64encode(
+        random.Random(seed).randbytes(size)).decode()
+
+
+@pytest.mark.parametrize("seed", range(25))
+def test_an_inline_base64_image_is_never_read_as_a_fact_image(seed):
+    """Its payload is bytes, not a name. Measured before the fix: 84% of random payloads matched."""
+    assert not CRE.looks_like_data_filename(CRE.asset_filename(_inline_png(seed)))
+
+
+@pytest.mark.parametrize("src", [
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg",
+    "data:image/svg+xml;utf8,<svg viewBox='0 0 24 24'><path d='M3 12h18'/></svg>",
+    "DATA:image/gif;base64,R0lGODlhAQABAIAAAP",          # scheme is case-insensitive
+    "  data:image/png;base64,iVBORw0KGgo",               # and may be padded by the author
+    "blob:https://example.test/9f1c2e4a-2025-11",
+])
+def test_an_opaque_asset_url_yields_no_filename_to_judge(src):
+    assert CRE.asset_filename(src) == ""
+    assert not CRE.looks_like_data_filename(CRE.asset_filename(src))
+
+
+@pytest.mark.parametrize("src,expected", [
+    ("https://s.test/a/revenue-2024.png", "revenue-2024.png"),
+    ("/img/q3-results-chart.svg", "q3-results-chart.svg"),
+    ("https://s.test/img/hero.jpg?v=2", "hero.jpg"),
+])
+def test_an_ordinary_asset_url_still_yields_its_filename(src, expected):
+    """The fix must narrow nothing except the case that has no name."""
+    assert CRE.asset_filename(src) == expected
+
+
+def test_a_page_of_inline_images_is_not_a_page_of_hidden_charts():
+    """The end-to-end shape: inline icons are ordinary, and must not manufacture a finding."""
+    inline = "".join(f'<img src="{_inline_png(i)}" width="120" height="120" alt="">'
+                     for i in range(8))
+    assert _image_state(f"<html><body>{inline}</body></html>")["state"] == "pass"
+
+
+def test_a_real_chart_beside_inline_icons_is_still_caught():
+    """The contrasting case: excluding inline assets must not hide a genuine defect next to them."""
+    inline = "".join(f'<img src="{_inline_png(i)}" width="120" height="120" alt="">'
+                     for i in range(2))
+    charts = "".join(f'<img src="/img/revenue-202{i}.png" width="800" height="600" alt="">'
+                     for i in range(6))
+    row = _image_state(f"<html><body>{inline}{charts}</body></html>")
+    assert row["state"] == "fail"
+    assert "revenue-2020.png" in row["evidence"]
+    assert "base64" not in row["evidence"], "a payload must never reach the report as evidence"
+
+
+def test_an_unjudgeable_image_counts_as_present_not_as_suspect():
+    """Where an inline asset lands in the ratio, asserted rather than left to chance.
+
+    It stays in the DENOMINATOR — it is an image on the page, above the size floor — and out of the
+    numerator, because we have no name to read. That is exactly how `hero.jpg` is already treated:
+    a name carrying no fact signal is not evidence of a hidden chart. The consequence is that
+    inline assets dilute the ratio, which is the same dilution any ordinary photo produces.
+    """
+    inline = "".join(f'<img src="{_inline_png(i)}" width="120" height="120" alt="">'
+                     for i in range(6))
+    charts = "".join(f'<img src="/img/revenue-202{i}.png" width="800" height="600" alt="">'
+                     for i in range(4))
+    row = _image_state(f"<html><body>{inline}{charts}</body></html>")
+    assert row["state"] == "partial"
+    assert "4/10" in str(row["measurement"]), "inline assets must be counted, not dropped"
+
+
 # =================================================================================================
 # 3. Severity must describe what was measured
 # =================================================================================================

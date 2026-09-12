@@ -244,6 +244,50 @@ def test_a_tagline_is_not_a_conflicting_name():
     assert not ENT._names_agree("Initech Ltd", "Globex Corporation")
 
 
+SCRIPT_NAMES = {
+    "japanese": "デジタル庁",
+    "chinese": "豆瓣",
+    "korean": "카카오",
+    "greek": "Ελληνικά",
+    "cyrillic": "Яндекс",
+    "arabic": "الجزيرة",
+    "devanagari": "राजभाषा विभाग",
+    "latin": "Acme Bakery",
+}
+
+
+@pytest.mark.parametrize("script", sorted(SCRIPT_NAMES))
+def test_a_name_agrees_with_an_identical_copy_of_itself_in_any_script(script):
+    """Normalization erased every non-Latin character, so a name became the EMPTY string.
+
+    `[^a-z0-9]+` is an ASCII rule. Applied to a name written in its own script it deleted the whole
+    name, and two empty strings do not intersect — so a site whose `<title>` and `og:site_name`
+    carried the same five characters was told its name "matches neither the page title nor the
+    domain". The evidence contradicted the same report's own title measurement.
+    """
+    name = SCRIPT_NAMES[script]
+    assert ENT.normalize_name(name) != "", "a name must not normalize away to nothing"
+    assert ENT._names_agree(name, name)
+
+
+@pytest.mark.parametrize("script", sorted(set(SCRIPT_NAMES) - {"latin"}))
+def test_distinct_names_in_one_script_still_disagree(script):
+    """The contrasting half: making comparison possible must not make everything match.
+
+    Without this, `normalize_name` returning a constant would satisfy the test above while
+    destroying the conflict detection the check exists for.
+    """
+    others = {"japanese": "総務省", "chinese": "新浪", "korean": "네이버", "greek": "Καθημερινή",
+              "cyrillic": "Сбербанк", "arabic": "العربية", "devanagari": "गृह मंत्रालय"}
+    assert not ENT._names_agree(SCRIPT_NAMES[script], others[script])
+
+
+def test_a_non_latin_tagline_is_still_not_a_conflict():
+    """The tagline rule must reach the scripts it previously could not see at all."""
+    assert ENT._names_agree("デジタル庁", "デジタル庁 | 日本のデジタル社会をつくる")
+    assert ENT._names_agree("Яндекс", "Яндекс — поиск")
+
+
 def test_the_agency_that_built_the_site_is_not_a_rival_brand():
     """A `Person` reached through `author` is the developer or the byline, not the business."""
     st = states_for("entity_agency_built.html")

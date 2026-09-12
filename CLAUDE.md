@@ -221,6 +221,26 @@ PowerShell terminal needs none of this.**
   because the highest shares in the corpus belong to hubspot (62.8%), MDN (51.9%) and w3.org (32%),
   all of which publish a proper `main` or `article`. Tuning on a single example is the
   fit-to-fixtures failure this project keeps punishing. Revisit only with more nav-only sites.
+- **A name is normalized by Unicode, never by the ASCII alphabet** (added 2026-09-12).
+  `normalize_name` stripped `[^a-z0-9]`, so a brand written in its own script normalized to the
+  EMPTY STRING — and two empty strings do not intersect. `_names_agree` therefore returned False
+  for two byte-identical names in Japanese, Chinese, Korean, Greek, Cyrillic, Arabic and
+  Devanagari. Measured on a government homepage whose `<title>` and `og:site_name` carry the same
+  five characters: the report said the name "matches neither the page title nor the domain" while
+  the same report's title measurement quoted those exact characters. Two findings contradicting
+  each other on one observable fact. Now `[\W_]+` under `re.UNICODE`, which keeps letters and
+  digits in every script and leaves Latin behaviour byte-identical. Discrimination is asserted
+  alongside agreement, because a normalizer that returned a constant would satisfy the first half
+  and destroy the conflict detection the check exists for.
+- **An inline asset has no filename, and its payload is not evidence** (added 2026-09-12).
+  `extraction.facts_not_image_only` derived a filename with `urlparse(src).path.rsplit("/")`. On a
+  `data:` URL that returns a slice of base64, whose alphabet is exactly what the fact-filename rule
+  looks for — letters for words, digits for a figure. Measured: **420 of 500 random inline PNGs**
+  were reported as images carrying trapped facts, and the evidence string printed in the report was
+  raw payload (`UEh4tn8UsNoAAAAASUVORK5CYII=`). Same family as the 2026-09-10 fingerprint defect one
+  layer earlier: that fix made the NAME harder to satisfy, while these URLs have no name at all.
+  `asset_filename()` now returns `""` for `data:` and `blob:`, so an inline image is counted as
+  present and never as suspect — the treatment `hero.jpg` already had.
 - **Every stream boundary is explicitly UTF-8, never the platform locale** (added 2026-09-12).
   `subprocess.run(text=True)` decodes with `locale.getpreferredencoding(False)` — cp1252 on a
   default Windows install — while we tell the child to WRITE utf-8 via `PYTHONIOENCODING`. That
@@ -323,7 +343,7 @@ PowerShell terminal needs none of this.**
 
 ## Current status: ALL TEN PHASES COMPLETE — **compliance signed off mechanically**
 
-**1055 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**1107 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -440,6 +460,8 @@ All ten phases are complete. The remaining optional, unscored items have been re
 | 9 | **Content-type was unenforced** (PLAN §10), **timeouts duplicated** across `budgets`/`fetch`/`render`, **global deadline unwired**, size cap gap, undeclared artifact fields, 3 dead config keys, dead code, stale role enum. | High→Low | ✅ **ALL 8 RESOLVED 2026-09-05** |
 | 10 | **A category can score 100 from a single measurable check.** On the SPA fixture, Human Orientation reads 100.0 because 5 of its 6 checks were suppressed and only `viewport_meta` remained. Overall `coverage` exposes this, but a per-CATEGORY coverage figure would stop a category headline being read as a clean bill of health. Relevant to the rubric's output-design criterion. | Medium | ✅ **RESOLVED 2026-09-11.** `summary.category_coverage` shipped in Phase 6 made it visible; Phase 8 made it un-misreadable. A category under 0.5 coverage now says it could not be assessed, while keeping its number. Asserted by `test_a_category_scoring_100_off_one_check_does_not_claim_to_be_fine`. |
 | 8 | **Browser relaunched per page.** `render_page` launches Chromium for every page (~3-4 s of the ~5 s per-page cost). At 5 pages that is ~25 s of the 270 s budget — acceptable now, but reusing one browser across pages is the obvious win if the budget ever tightens. | Low | Optimize if needed |
+| 11 | **Character-count bands are calibrated for alphabetic scripts and applied to logographic ones.** `content.title_descriptive` (15-70) and `content.meta_description` (50-160) are both `requires_language=false` and count raw characters. A CJK character carries roughly a morpheme, so the same organisation passes in English and fails in its own script. Proof from one real page: `jma.go.jp` titles itself `気象庁 Japan Meteorological Agency` (31 chars, **pass**); the Japanese name alone is 3 chars (**partial**). Measured on 9 CJK homepages: **6 of 9 report a false TITLE partial** (総務省 = 3 chars = "Ministry of Internal Affairs and Communications", 46 Latin chars; 文部科学省 = 5 chars = 61 Latin chars), and **2 of 9 also a false DESC partial**. `detect_faq_schema`'s 8-character question floor is a minor third instance. | **High** | **Open — deliberately NOT fixed.** The defect is proven; no remedy is. East Asian Width gives a factor of 2, measured insufficient (総務省 → 6, still under 15); a CJK-specific floor would be a constant fitted to a 9-site sample, the fit-to-fixtures failure this project has punished five times; `requires_language` gating is too blunt because `language.supported` is `["en"]` alone, so it would also gate German and French, where the band is valid. Needs a labelled multi-script corpus with human judgements of title adequacy before any constant is chosen. |
+| 12 | **`authority_domains` contradicts its own check's definition.** `check_sameas_authority` documents authority as "a record somebody ELSE maintains" and grades self-published profiles `partial` because "the brand controls both ends". The list nevertheless contains `linkedin.com`, `github.com` and `gitlab.com`, whose organisation profiles are created and controlled by the organisation — while `facebook.com`, equally self-managed, is classified social. Observed effect: `digital.go.jp` scores a **`pass`** on a LinkedIn company page alone, i.e. full authority credit with no independent corroboration. | Medium | **Open — not changed.** Genuinely contested: LinkedIn requires domain verification and is widely used for entity reconciliation, so its inclusion is defensible. Reclassifying would move `healthy_page.html` and `archetype_adversarial.html`, both carrying labelled corpus score bands, so it needs a deliberate re-label rather than a unilateral edit. |
 
 | 7 | **`allow_private_hosts` is a live SSRF bypass switch.** Default false and test-only, but if it were ever set true in a real run the guard is fully disabled. Phase 3 must pass it only from test fixtures, never from CLI input. | Medium | Guard in Phase 3 |
 
@@ -757,7 +779,7 @@ python tests/run_precision_recall.py                                            
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 1055 passed, 0 skipped
+pytest -q                                                                                  # 1107 passed, 0 skipped
 for s in skills/*/; do agentskills validate "$s"; done                                     # all six skills, pinned in the dev extra
 ```
 
@@ -1395,3 +1417,47 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   validator was documented as `skills-ref validate`, a command that does not exist, and annotated
   "not installed yet" when it has been pinned in the dev extra since Phase 10. Re-run to confirm
   rather than assumed — all six skills report `Valid skill` under `agentskills validate`.
+- 2026-09-12 — **Adversarial validation against `digital.go.jp` (Japanese): two confirmed general
+  bugs fixed, two calibration defects proven and deliberately left open.**
+  The report under test scored 82 with six findings. Three were investigated against fresh evidence
+  fetched independently of the tool; two were false positives caused by defects that have nothing to
+  do with this site, and one is real but unfixable without data we do not have.
+  **Fixed 1 — a name could not match an identical copy of itself outside the Latin alphabet.**
+  `normalize_name` stripped `[^a-z0-9]`, so `デジタル庁` normalized to `""`. The report claimed the
+  name "matches neither the page title nor the domain" while quoting those same five characters as
+  the page title two findings earlier — a self-contradiction on an observable fact. Verified in the
+  raw HTML: `<title>` and `og:site_name` are byte-identical. Reproduced in Japanese, Chinese,
+  Korean, Greek, Cyrillic, Arabic and Devanagari, so it is every non-Latin script rather than one
+  page. `entity.name_consistency` partial → pass.
+  **Fixed 2 — a base64 payload read as a chart filename.** `urlparse(src).path.rsplit("/")` on a
+  `data:` URL returns a slice of its own payload, and base64's alphabet is exactly what the
+  fact-filename rule wants: letters for words, digits for a figure. The evidence string printed in
+  the report was literally `UEh4tn8UsNoAAAAASUVORK5CYII=`. Generalization measured rather than
+  argued: **420 of 500 random inline PNGs** were flagged. `extraction.facts_not_image_only`
+  partial → pass, and every designed detection still fires.
+  **Not fixed — the character-count bands (open issue #11).** Proven miscalibrated for logographic
+  scripts: 6 of 9 CJK homepages surveyed take a false title partial, and `jma.go.jp` passes with
+  `気象庁 Japan Meteorological Agency` while its own Japanese name alone would not. No remedy was
+  available that is not a constant fitted to a 9-site sample, so the threshold was left untouched
+  and the evidence recorded instead. **Not fixed — `authority_domains` (open issue #12)**, which
+  grades a self-managed LinkedIn page as a third-party record against its own check's definition.
+  **Checked and found NOT to be bugs**, each verified rather than assumed: `access.ai_crawlers_allowed`
+  passing is correct — the live `robots.txt` names no AI crawler and disallows only `/core/`,
+  `/profiles/` and `/README.md`; `detect_faq_schema` is already punctuation-based and handles the
+  full-width `？`, so it is not English-gated; and the markdown-looking `site` value is the report
+  reader's rendering, not the emitted field, which is the raw URL.
+  The three surviving entity findings are all TRUE positives: the page genuinely publishes no
+  JSON-LD and no microdata, declares identity only through Open Graph, and declares no `sameAs`.
+  Verified end to end: `digital.go.jp` **82 → 85**, findings **6 → 4**, ai_discoverability
+  **95.0 → 100.0**, entity_trust **50.0 → 56.0**, and **coverage unchanged at 0.848** — the fixes
+  removed two false findings without hiding a single measurement. The title finding remains, as
+  intended, because its threshold was left alone. Cross-site regression: `python.org` reproduces
+  **94 / 0.975 / 3** exactly, and every corpus fixture holds its recorded score with recall and
+  precision still 100% — `healthy_page.html` and `archetype_adversarial.html` both still 99, which
+  is what proves the Unicode change did not move Latin-script grading.
+  Test count 1055 → **1107**, 0 skipped. Three mutations applied: reverting the normalizer fails 8
+  tests, reverting the image call site fails 2, removing the helper guard fails 24.
+  **One of my own tests failed first and the fix was right, not the test.** I asserted `fail` for 4
+  charts among 10 images; that is ratio 0.40 against a 0.50 cap, so `partial` was correct. Replaced
+  with a case above the cap, and a separate test now pins where an unjudgeable image lands in the
+  ratio — denominator yes, numerator no — so the dilution is asserted rather than assumed.
