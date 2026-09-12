@@ -51,7 +51,7 @@
     ],
     "language_detected": "en",
     "language_supported": true,
-    "user_agent": "CitelyAuditBot/0.1 (+https://example.com/citely-bot)",
+    "user_agent": "CitelyAuditBot/0.1",
     "robots_checked": false,
     "external_lookup": false,
     "advisor": {},

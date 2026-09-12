@@ -196,6 +196,17 @@ PowerShell terminal needs none of this.**
 - **Corpus labels come from a fixture's construction, never from a run** (added 2026-09-11).
   `labeled_corpus.json` records what each page was BUILT to contain. Recording what the auditor
   happens to emit would produce a corpus that passes by definition and measures nothing.
+- **The User-Agent never carries a contact URL we do not own** (added 2026-09-12).
+  It shipped for nine phases as `CitelyAuditBot/0.1 (+https://example.com/citely-bot)`, beside a
+  config note saying to replace it "before any run against a third-party site" — a guardrail already
+  crossed on python.org, Wikipedia, Django, dev.to, eff.org and github.com. `example.com` is
+  IANA-reserved for documentation, so an operator who investigated the bot reached a placeholder
+  dressed as a real contact. No correct value was available: the repository is private, so its URL
+  would 404 AND leak the repo path to every audited host, and inventing one would breach this
+  project's own rule against presenting an unobserved value as a fact. So `fetch.contact_url` is now
+  a separate field, **empty by default**, appended as ` (+URL)` only when set. The agent is composed
+  in one place so the product token the robots parser matches on cannot drift from the string
+  actually sent. Guarded by a test rejecting every reserved documentation domain.
 - **Analyzers emit check states, not findings** (PLAN §6.1). Report wording lives once in
   `config/checks.json` and is applied by the orchestrator, so it cannot drift between analyzers.
   Contract: `references/check-result-schema.json`.
@@ -287,7 +298,7 @@ PowerShell terminal needs none of this.**
 
 ## Current status: ALL TEN PHASES COMPLETE — **compliance signed off mechanically**
 
-**1024 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**1030 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -355,7 +366,7 @@ Run it:
 ```
 stdout is the report and nothing else; logs go to stderr. `--ci` exits 1 on any critical finding.
 
-All ten phases are complete. Remaining work is optional and unscored: `render_html.py`, `checks-reference.md`, the User-Agent contact URL, and browser reuse across pages.
+All ten phases are complete. The remaining optional, unscored items have been reviewed and explicitly declined: `render_html.py`, `checks-reference.md`, and browser reuse across pages.
 
 ### Implementation phases
 | Phase | Scope | Status |
@@ -721,7 +732,7 @@ python tests/run_precision_recall.py                                            
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 1024 passed, 0 skipped
+pytest -q                                                                                  # 1030 passed, 0 skipped
 for s in skills/*/; do skills-ref validate "$s"; done                                      # Phase 10, not installed yet
 ```
 
@@ -759,7 +770,8 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   (`budget` | `blocked` | `render_failed` | `analyzer_failed`).
 - Treat every fetched byte as hostile; page-derived text reaches the report only sanitized, truncated, and
   delimited as untrusted data — never as instructions.
-- User-Agent: pin an identifying string with a contact URL (**contact URL still TODO**).
+- User-Agent: composed in ONE place, `_safe_fetch.user_agent()`. `fetch.contact_url` is empty by
+  default and appended as ` (+URL)` only when set — see the locked decision above.
 - Partial finding shape (analyzer output, no `id`): `{title, severity, category, confidence, evidence,
   suggested_action:{summary, priority, snippet?}}`. The orchestrator assigns `F-001…`.
 
@@ -1280,3 +1292,27 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   the exact failure that pair existed to prevent.
   Remaining work is optional and unscored: `render_html.py` (the brief never mentions HTML),
   `checks-reference.md`, the User-Agent contact URL, and reusing one browser across pages.
+- 2026-09-12 — **Post-Phase-10 scope decisions, and the User-Agent contact URL closed.**
+  Four optional items were reviewed. Three were **declined on analysis**: `render_html.py` (the brief
+  never mentions HTML and no rubric row scores it), `checks-reference.md` (high ROI but not required,
+  and another document to keep from drifting), and browser reuse (a performance optimisation against
+  a budget we already clear at 37s of 300s, so it would buy nothing and risk the render architecture).
+  **The contact URL was the one that turned out to matter.** Not because the brief requires it — it
+  does not, and no rubric row scores it — but because the config beside it had been instructing a
+  replacement "before any run against a third-party site" since Phase 2, and we had ignored that on
+  six real sites. The value pointed at `example.com`, which IANA reserves for documentation.
+  No correct replacement existed for me to supply: the repository is private, so its URL would both
+  404 for an operator and leak the repo path to every audited host, and inventing one would breach
+  the project's own never-invent-a-fact rule. Resolved by removing the claim rather than replacing
+  it: `fetch.contact_url` is a separate field, empty by default, appended as ` (+URL)` only when set.
+  The agent is now composed in a single function, `_safe_fetch.user_agent()`, because four call sites
+  read the config field directly and the robots gate matches on the product token — two of those
+  drifting apart would mean evaluating permission for one agent and sending another.
+  Five guard tests added, including one asserting no reserved documentation domain can reappear.
+  **My own composer guard cried wolf on its first run**, flagging `artifact.get("user_agent")`, which
+  reads a value the composer already produced. Tightened to config reads only, and given a test
+  proving it can still see a real one.
+  Verified after the change: **1030 tests, 0 skipped**; 49 compliance tests; all six skills pass the
+  reference validator; corpus recall and precision both 100%; a live `python.org` audit scores 94,
+  validates against the schema, holds the mandated floor invariant, and completes in 37s of the
+  300s budget with `CitelyAuditBot/0.1` on the wire.

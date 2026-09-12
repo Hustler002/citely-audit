@@ -359,6 +359,28 @@ def read_capped(response, max_bytes: int, max_decompressed: int) -> bytes:
 
 
 # --- Fetch ------------------------------------------------------------------------------------
+DEFAULT_USER_AGENT = "CitelyAuditBot/0.1"
+
+
+def user_agent(config: dict) -> str:
+    """The identifying User-Agent sent on every request, composed in exactly one place.
+
+    `fetch.contact_url` is appended as " (+URL)" only when it is set. It is empty by default, and
+    deliberately so: the field used to carry an example.com address, which IANA reserves for
+    documentation, so a site operator investigating the bot reached a placeholder page that read
+    like a real contact. An invented URL would be worse still — this project's own rule is never to
+    present an unobserved value as a fact, and a User-Agent is the one thing a third-party operator
+    actually sees.
+
+    Composed here rather than read straight from config at four call sites, so the product token
+    the robots parser matches on and the string actually sent can never drift apart.
+    """
+    fetch_cfg = (config or {}).get("fetch") or {}
+    base = (fetch_cfg.get("user_agent") or DEFAULT_USER_AGENT).strip()
+    contact = (fetch_cfg.get("contact_url") or "").strip()
+    return f"{base} (+{contact})" if contact else base
+
+
 def safe_get(url: str, config: dict, *, deadline: float | None = None,
              extra_headers: dict | None = None,
              require_content_types=None) -> FetchResult:
@@ -376,7 +398,7 @@ def safe_get(url: str, config: dict, *, deadline: float | None = None,
                float(fetch_cfg.get("read_timeout_s", 15)))
 
     headers = {
-        "User-Agent": fetch_cfg.get("user_agent", "CitelyAuditBot/0.1"),
+        "User-Agent": user_agent(config),
         "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
         "Accept-Encoding": "gzip, deflate",
     }
@@ -480,7 +502,7 @@ def check_robots(base_url: str, config: dict, *, deadline: float | None = None) 
     """
     robots_cfg = config.get("robots", {})
     tokens = [c["token"] for c in robots_cfg.get("ai_crawlers", []) if "token" in c]
-    audit_ua = config.get("fetch", {}).get("user_agent", "CitelyAuditBot/0.1")
+    audit_ua = user_agent(config)
     # RobotFileParser matches on the product token, not the full UA string.
     audit_token = audit_ua.split("/", 1)[0]
 

@@ -21,6 +21,8 @@ import re
 import time
 from dataclasses import dataclass, field
 
+import _safe_fetch
+
 log = logging.getLogger("render")
 
 TIER_A = "playwright"
@@ -398,7 +400,7 @@ def render_with_browser(url: str, config: dict, *, deadline: float | None = None
             try:
                 context = browser.new_context(
                     viewport={"width": width, "height": height},
-                    user_agent=config.get("fetch", {}).get("user_agent"),
+                    user_agent=_safe_fetch.user_agent(config),
                 )
                 page = context.new_page()
 

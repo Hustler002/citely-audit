@@ -228,6 +228,83 @@ def test_the_report_meets_the_briefs_mandated_floor():
         assert {"summary", "priority"} <= set(finding["suggested_action"])
 
 
+# =================================================================================================
+# The User-Agent, which is the one thing a third-party operator actually sees
+# =================================================================================================
+# RFC 2606 and RFC 6761 reserve these for documentation. A crawler that points an operator at one
+# hands them a placeholder page dressed as a real contact.
+RESERVED_DOMAINS = ("example.com", "example.org", "example.net", "example.edu",
+                    ".example", ".invalid", ".test", "localhost")
+
+
+def _fetch_config():
+    return json.loads((REPO_ROOT / "config" / "scoring-config.json")
+                      .read_text(encoding="utf-8"))["fetch"]
+
+
+def test_the_user_agent_never_points_at_a_reserved_documentation_domain():
+    """It shipped as `CitelyAuditBot/0.1 (+https://example.com/citely-bot)` for nine phases, beside
+    a config note telling us to replace it "before any run against a third-party site" — a
+    guardrail already crossed on python.org, Wikipedia, Django and others. The field is now empty
+    by default; this stops a placeholder being reintroduced as though it were a contact."""
+    sys.path.insert(0, str(SKILLS_DIR / "audit-orchestrator" / "scripts"))
+    import _safe_fetch as SF
+
+    config = {"fetch": _fetch_config()}
+    agent = SF.user_agent(config).lower()
+    for domain in RESERVED_DOMAINS:
+        assert domain not in agent, f"User-Agent points at the reserved domain {domain}: {agent}"
+
+
+def test_the_user_agent_identifies_the_bot_even_with_no_contact_configured():
+    """Dropping the fake URL must not cost the identification the brief's politeness rules rely on."""
+    sys.path.insert(0, str(SKILLS_DIR / "audit-orchestrator" / "scripts"))
+    import _safe_fetch as SF
+
+    assert SF.user_agent({"fetch": {"user_agent": "CitelyAuditBot/0.1", "contact_url": ""}}) ==         "CitelyAuditBot/0.1"
+    assert SF.user_agent({}) == SF.DEFAULT_USER_AGENT
+    assert SF.user_agent({"fetch": {}}) == SF.DEFAULT_USER_AGENT
+
+
+def test_a_configured_contact_url_is_appended_in_the_conventional_form():
+    sys.path.insert(0, str(SKILLS_DIR / "audit-orchestrator" / "scripts"))
+    import _safe_fetch as SF
+
+    agent = SF.user_agent({"fetch": {"user_agent": "CitelyAuditBot/0.1",
+                                     "contact_url": "https://citely.test/bot"}})
+    assert agent == "CitelyAuditBot/0.1 (+https://citely.test/bot)"
+
+
+def test_the_robots_token_still_matches_the_agent_that_is_sent():
+    """The robots parser matches on the product token, so composing the agent in one place must not
+    let the token and the string actually sent drift apart."""
+    sys.path.insert(0, str(SKILLS_DIR / "audit-orchestrator" / "scripts"))
+    import _safe_fetch as SF
+
+    config = {"fetch": {"user_agent": "CitelyAuditBot/0.1", "contact_url": "https://citely.test/x"}}
+    assert SF.user_agent(config).split("/", 1)[0] == "CitelyAuditBot"
+
+
+def test_every_outbound_user_agent_comes_from_the_one_composer():
+    """Four call sites used to read the config field directly. Any that still does would silently
+    send a different string from the one the robots gate was evaluated against."""
+    # Matches a read from the CONFIG only. `artifact.get("user_agent")` is fine — that value was
+    # already produced by the composer, and flagging it was this guard crying wolf on its first run.
+    config_reads = ('get("fetch", {}).get("user_agent"', 'fetch_cfg.get("user_agent"')
+    offenders = []
+    for path in (SKILLS_DIR / "audit-orchestrator" / "scripts").glob("*.py"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if any(pattern in line for pattern in config_reads) and "DEFAULT_USER_AGENT" not in line:
+                offenders.append(f"{path.name}: {line.strip()}")
+    assert not offenders, f"User-Agent read from config outside the composer: {offenders}"
+
+
+def test_the_composer_guard_can_actually_see_a_direct_read():
+    """A guard that cannot fail is not a guard."""
+    line = '    ua = config.get("fetch", {}).get("user_agent", "")'
+    assert 'get("fetch", {}).get("user_agent"' in line
+
+
 def test_the_readme_describes_every_skill_and_the_composition():
     """The brief requires a root README "describing what each skill does and how the entrypoint
     composes them", so both halves are asserted, not just the list."""

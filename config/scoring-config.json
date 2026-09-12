@@ -39,8 +39,9 @@
     "global_deadline_s": 270
   },
   "fetch": {
-    "user_agent": "CitelyAuditBot/0.1 (+https://example.com/citely-bot)",
-    "_user_agent_todo": "Replace the contact URL before any run against a third-party site.",
+    "user_agent": "CitelyAuditBot/0.1",
+    "contact_url": "",
+    "_contact_url_note": "Optional. When set, it is appended as ' (+URL)' to form the User-Agent sent on every request, which is the convention for identifying a crawler to a site operator. It is EMPTY by default on purpose. It previously held 'https://example.com/citely-bot', a domain IANA reserves for documentation, so an operator who investigated the bot landed on a placeholder that read like a real contact. Shipping an invented URL would also breach this project's own rule against presenting an unobserved value as a fact. Set it to a page you actually control.",
     "max_body_bytes": 5242880,
     "max_decompressed_bytes": 20971520,
     "max_redirects": 5,

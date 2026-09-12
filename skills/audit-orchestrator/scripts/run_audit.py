@@ -464,7 +464,7 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         artifact = {
             "requested_url": f"file://{html_file}", "final_url": f"file://{html_file}",
             "fetched_at": artifact_mod.utc_now(),
-            "user_agent": config.get("fetch", {}).get("user_agent", ""),
+            "user_agent": fetch_mod.user_agent(config),
             "robots": {"checked": False, "allowed": True, "crawl_delay": None,
                        "status": None, "sitemaps": []},
             "ai_crawlers": {"determinable": False, "allowed": {}, "blocked": []},
