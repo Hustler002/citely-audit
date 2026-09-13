@@ -5,35 +5,41 @@
   "license": "Apache-2.0",
   "skills": [
     {
-      "name": "audit-orchestrator",
+      "id": "audit-orchestrator",
       "path": "skills/audit-orchestrator",
       "entrypoint": true,
       "description": "Sequences the audit: single safe crawl + render, runs the four analysis skills, merges/ranks findings, computes the discoverability score, validates and emits the final report."
     },
     {
-      "name": "crawl-render-extraction-audit",
+      "id": "crawl-render-extraction-audit",
       "path": "skills/crawl-render-extraction-audit",
       "entrypoint": false,
       "description": "Mechanic 1 — Access, Render/Readability (raw-vs-rendered diff or browserless heuristic), and Fact Extraction over the shared crawl artifact."
     },
     {
-      "name": "quotability-density-audit",
+      "id": "quotability-density-audit",
       "path": "skills/quotability-density-audit",
       "entrypoint": false,
       "description": "Mechanics 2 + 3 — RAG quotability and information-density / summarizer-survival analysis over rendered HTML."
     },
     {
-      "name": "entity-corroboration-audit",
+      "id": "entity-corroboration-audit",
       "path": "skills/entity-corroboration-audit",
       "entrypoint": false,
-      "description": "Mechanic 4 — structured-data (JSON-LD/OG/microdata) entity-graph extraction and optional soft-fail Wikidata corroboration."
+      "description": "Mechanic 4 — structured-data (JSON-LD/OG/microdata) entity-graph extraction, plus sameAs and third-party-anchor analysis over the links the page itself publishes. No network access."
     },
     {
-      "name": "engagement-orientation-audit",
+      "id": "engagement-orientation-audit",
       "path": "skills/engagement-orientation-audit",
       "entrypoint": false,
       "description": "Mechanic 5 — deterministic first-viewport orientation and visitor-retention heuristics over the rendered DOM."
+    },
+    {
+      "id": "remediation-advisor",
+      "path": "skills/remediation-advisor",
+      "entrypoint": false,
+      "description": "Prescription rather than detection — turns findings into copy-paste snippets with a validation procedure, and adds non-obvious proactive suggestions where no defect was found. Never invents business facts."
     }
   ],
-  "_note": "marketplace.json and the `entrypoint` flag are this project's bespoke platform convention. They are NOT part of the base agentskills.io spec, which defines only the per-skill folder + SKILL.md format."
+  "_note": "marketplace.json and the `entrypoint` flag are this brief's own lightweight convention, not part of the base agentskills.io spec, which defines only the per-skill folder + SKILL.md. Skills are keyed by `id` because that is the key the brief's own manifest example uses, and the published example is the only specification this convention has. `id` matches the skill folder name and the SKILL.md `name` frontmatter, which the spec requires to match the folder."
 }

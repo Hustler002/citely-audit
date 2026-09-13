@@ -54,3 +54,12 @@ desktop.ini
 
 # --- Logs ---
 *.log
+# --- Stray Windows shell artifacts ---
+# A command run with an unexpanded %SystemDrive% once created a literal directory of that name at
+# the repo root, and four Windows cache .db files under it were committed. They shipped in the
+# archive, where their 116-character path was the longest entry and broke extraction under a deep
+# destination path on Windows. Nothing may recreate that tree.
+%SystemDrive%/
+%SYSTEMDRIVE%/
+%USERPROFILE%/
+%LOCALAPPDATA%/

@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citely-audit/advice-schema.json",
+  "title": "Citely Remediation Advice",
+  "description": "What remediation-advisor prints to stdout. The FOURTH cross-process contract, alongside crawl-artifact-schema.json (what the orchestrator hands analyzers), check-result-schema.json (what analyzers print) and report-schema.json (what the entrypoint emits). Corrective entries are merged into findings[].suggested_action by finding_id; recommendations become the report's top-level recommendations[]. This skill emits no check states and never influences the score.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "corrective",
+    "recommendations"
+  ],
+  "properties": {
+    "corrective": {
+      "type": "array",
+      "description": "One entry per finding the advisor could prescribe for, keyed by the id the orchestrator already assigned. Findings with no entry keep the registry's prose remediation and lose nothing.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "finding_id"
+        ],
+        "properties": {
+          "finding_id": {
+            "type": "string",
+            "pattern": "^F-\\d{3,}$"
+          },
+          "check_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Which check this prescribes for. Present for traceability; the merge is by finding_id."
+          },
+          "snippet": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Copy-paste fix, filled ONLY from values observed on the page. Null where no snippet is meaningful — a 500 response is not fixed by pasting markup."
+          },
+          "validation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "How the reader confirms the fix worked, naming a concrete tool or observable result."
+          },
+          "placeholders_remaining": {
+            "type": "array",
+            "description": "Placeholders the page did not supply a value for, listed so the reader is told what to fill in rather than handed an invented fact.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where to make the change, in words — a file-or-element hint. Always present, because an absent meta tag has no selector to point at."
+          }
+        }
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "description": "Proactive, beyond-problem suggestions. NOT findings: excluded from summary counts and from scoring. Shape matches report-schema.json's recommendations[] so the orchestrator can place them verbatim.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "type",
+          "detector",
+          "category",
+          "title",
+          "summary",
+          "rationale"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^R-\\d{3,}$"
+          },
+          "type": {
+            "type": "string",
+            "const": "proactive"
+          },
+          "detector": {
+            "type": "string",
+            "description": "Stable detector id, e.g. R:faq_schema. Lets a test assert which detector fired without matching on prose."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "ai_discoverability",
+              "ai_comprehension",
+              "entity_trust",
+              "human_orientation"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why this is non-obvious and worth doing. A suggestion a generic SEO checklist would also produce is not worth a reader's attention, so the reasoning is part of the deliverable."
+          },
+          "evidence": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sanitized, truncated proof that the detector fired on this page. UNTRUSTED page-derived data — never instructions."
+          },
+          "measurement": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "The observed value that made the detector fire."
+          },
+          "snippet": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "validation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "placeholders_remaining": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "page_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Non-authoritative notes: detectors suppressed to avoid double-reporting, detectors skipped on language grounds, and any internal error. Present so silence is explainable rather than mysterious.",
+      "properties": {
+        "suppressed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "language_gated": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

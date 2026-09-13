@@ -6,7 +6,7 @@ network access, so every URL-safety concern is centralized in this one module.
 
 Threat model: the URL is attacker-influenced and the response is hostile input.
 
-Defences (PLAN.md §10):
+Defences:
   * Scheme allowlist; URL userinfo rejected; port allowlist.
   * Every resolved A/AAAA record validated against private / loopback / link-local / reserved /
     multicast / ULA / IPv4-mapped-IPv6 ranges and the cloud metadata IP 169.254.169.254.
@@ -79,6 +79,50 @@ class UnexpectedContentTypeError(FetchError):
     """Response was not one of the content types the caller asked for."""
 
 
+class UndecodableContentEncodingError(FetchError):
+    """Response arrived in a compression the HTTP stack here cannot undo."""
+
+
+class MalformedContentEncodingError(UndecodableContentEncodingError):
+    """Response declared an encoding its body does not actually contain."""
+
+
+def decodable_encodings() -> frozenset:
+    """Content encodings the installed HTTP stack can actually undo.
+
+    Read from urllib3 rather than hardcoded, because the answer depends on what is installed:
+    `br` appears in this list only when a Brotli package is present. Hardcoding either answer
+    would be wrong on half the machines this runs on.
+    """
+    try:
+        from urllib3.response import HTTPResponse
+        supported = {str(e).lower() for e in HTTPResponse.CONTENT_DECODERS}
+    except Exception:                      # pragma: no cover - urllib3 internals moved
+        supported = {"gzip", "x-gzip", "deflate"}
+    return frozenset(supported | {"identity", ""})
+
+
+def undecodable_encodings(content_encoding: str | None) -> list:
+    """Which of a response's declared encodings we cannot undo, in order.
+
+    We advertise only `gzip, deflate`, so a well-behaved server never sends anything else. Some
+    do anyway — a CDN returning `br` to every client regardless of Accept-Encoding is real and
+    reachable on the open web. `br` is decodable because Brotli is a pinned dependency; this
+    covers whatever remains, and `br` too if Brotli is ever absent. urllib3 passes an encoding it
+    cannot decode straight through WITHOUT raising, so the caller is handed compressed bytes
+    labelled as HTML.
+
+    That failure is silent and it poisons everything downstream: the raw-HTML checks see no
+    landmarks and no images in what is really binary, page selection finds no navigation links,
+    and the report states those absences as fact. Refusing the response instead turns an
+    unreadable page into an honest error, and the scoring model already treats a page it could
+    not read as `unknown` rather than as a failure.
+    """
+    usable = decodable_encodings()
+    declared = [part.strip().lower() for part in (content_encoding or "").split(",")]
+    return [part for part in declared if part not in usable]
+
+
 def deadline_from_config(config: dict, started: float | None = None) -> float:
     """Absolute monotonic deadline derived from `budgets.global_deadline_s`.
 
@@ -120,7 +164,7 @@ class FetchResult:
 
 @dataclass
 class RobotsResult:
-    """Robots outcome, split into the two concerns PLAN.md §6.3.1 keeps separate."""
+    """Robots outcome, split into two concerns that must never be conflated."""
     checked: bool = False
     status: int | None = None
     # (1) Operational gate: may OUR auditor fetch? Never scored.
@@ -359,6 +403,28 @@ def read_capped(response, max_bytes: int, max_decompressed: int) -> bytes:
 
 
 # --- Fetch ------------------------------------------------------------------------------------
+DEFAULT_USER_AGENT = "CitelyAuditBot/0.1"
+
+
+def user_agent(config: dict) -> str:
+    """The identifying User-Agent sent on every request, composed in exactly one place.
+
+    `fetch.contact_url` is appended as " (+URL)" only when it is set. It is empty by default, and
+    deliberately so: the field used to carry an example.com address, which IANA reserves for
+    documentation, so a site operator investigating the bot reached a placeholder page that read
+    like a real contact. An invented URL would be worse still — this project's own rule is never to
+    present an unobserved value as a fact, and a User-Agent is the one thing a third-party operator
+    actually sees.
+
+    Composed here rather than read straight from config at four call sites, so the product token
+    the robots parser matches on and the string actually sent can never drift apart.
+    """
+    fetch_cfg = (config or {}).get("fetch") or {}
+    base = (fetch_cfg.get("user_agent") or DEFAULT_USER_AGENT).strip()
+    contact = (fetch_cfg.get("contact_url") or "").strip()
+    return f"{base} (+{contact})" if contact else base
+
+
 def safe_get(url: str, config: dict, *, deadline: float | None = None,
              extra_headers: dict | None = None,
              require_content_types=None) -> FetchResult:
@@ -376,7 +442,7 @@ def safe_get(url: str, config: dict, *, deadline: float | None = None,
                float(fetch_cfg.get("read_timeout_s", 15)))
 
     headers = {
-        "User-Agent": fetch_cfg.get("user_agent", "CitelyAuditBot/0.1"),
+        "User-Agent": user_agent(config),
         "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
         "Accept-Encoding": "gzip, deflate",
     }
@@ -426,7 +492,23 @@ def safe_get(url: str, config: dict, *, deadline: float | None = None,
                         f"content-type {declared_type!r} not in {sorted(require_content_types)}"
                     )
 
-                body = read_capped(response, max_bytes, max_decompressed)
+                stuck = undecodable_encodings(response.headers.get("Content-Encoding"))
+                if stuck:
+                    raise UndecodableContentEncodingError(
+                        f"content-encoding {', '.join(stuck)} cannot be decoded here"
+                    )
+
+                try:
+                    body = read_capped(response, max_bytes, max_decompressed)
+                except requests.exceptions.ContentDecodingError as exc:
+                    # A decoder exists but the body is not what the header claims. requests files
+                    # this under RequestException, so without this it was reported as a network
+                    # failure, sending an operator to debug a connection that worked.
+                    declared = (response.headers.get("Content-Encoding") or "").strip()
+                    raise MalformedContentEncodingError(
+                        f"content-encoding {declared} is declared but the body is not valid "
+                        f"{declared} data"
+                    ) from exc
                 result.final_url = redact_url(response.url)
                 result.status = response.status_code
                 result.content_type = response.headers.get("Content-Type")
@@ -445,6 +527,8 @@ def safe_get(url: str, config: dict, *, deadline: float | None = None,
         result.error, result.error_kind = str(exc), "too_large"
     except UnexpectedContentTypeError as exc:
         result.error, result.error_kind = str(exc), "content_type"
+    except UndecodableContentEncodingError as exc:
+        result.error, result.error_kind = str(exc), "content_encoding"
     except requests.exceptions.SSLError as exc:
         # Recorded, never retried over plaintext: silently downgrading would defeat the point.
         result.error, result.error_kind = f"TLS failure: {exc}", "tls"
@@ -480,7 +564,7 @@ def check_robots(base_url: str, config: dict, *, deadline: float | None = None) 
     """
     robots_cfg = config.get("robots", {})
     tokens = [c["token"] for c in robots_cfg.get("ai_crawlers", []) if "token" in c]
-    audit_ua = config.get("fetch", {}).get("user_agent", "CitelyAuditBot/0.1")
+    audit_ua = user_agent(config)
     # RobotFileParser matches on the product token, not the full UA string.
     audit_token = audit_ua.split("/", 1)[0]
 
@@ -494,7 +578,7 @@ def check_robots(base_url: str, config: dict, *, deadline: float | None = None) 
     if fetched.error is not None:
         out.checked = False
         out.error = fetched.error
-        out.audit_allowed = False   # conservative: unreachable != permitted (PLAN §6.3.1)
+        out.audit_allowed = False   # conservative: unreachable != permitted
         # ...but record WHY. Without this the caller cannot tell "the site refuses crawlers" from
         # "we could not reach robots.txt", and would report the former about a site it never read.
         out.unreachable = True

@@ -49,8 +49,43 @@ def configure_logging(level: int = logging.INFO) -> None:
 
 MAX_EVIDENCE = 300
 _WS_RE = re.compile(r"\s+")
+
+# Specificity, not vocabulary. A value proposition is recognised by naming something CONCRETE —
+# a measured figure or a proper noun — because no closed word list can hold the open web's product
+# categories. The lookbehinds stop a capitalised first word counting as a name.
+_ANCHOR_NUMBER_RE = re.compile(r"(?:[$£€¥]\s?\d|\d[\d,.]*\s?%|\b\d[\d,.]*\s?[a-zA-Z]{1,12}\b)")
+_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'’\-]*|[.!?]")
+
+
+def has_proper_noun(text: str) -> bool:
+    """A capitalised word used INSIDE a sentence, which is where real names show up.
+
+    Done token by token rather than with one regex, because the rule needs the PREVIOUS word and a
+    variable-length lookbehind is not expressible. Two exclusions, both found by probing rather
+    than by reasoning:
+
+      * the first word of a sentence is capitalised by grammar, not by being a name;
+      * a capitalised word following another capitalised word is a Title Case run. Without this,
+        the heading "Example Domain" reads as a proper noun and example.com — a page that offers
+        nothing whatsoever — scores as though it named something specific.
+    """
+    previous, sentence_start = "", True
+    for token in _TOKEN_RE.findall(text or ""):
+        if token in ".!?":
+            sentence_start = True
+            previous = ""
+            continue
+        if (not sentence_start and len(token) >= 3
+                and token[0].isupper() and token[1:].islower()
+                and previous and previous[0].islower()):
+            return True
+        sentence_start = False
+        previous = token
+    return False
+# Quoted or unquoted, as HTML allows. Kept identical to the orchestrator's `detect_language`.
 _LANG_ATTR_RE = re.compile(
-    r"<html[^>]*\blang\s*=\s*[\"']([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)[\"']", re.IGNORECASE)
+    r"<html[^>]*\blang\s*=\s*[\"']?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)(?=[\"'\s/>]|$)",
+    re.IGNORECASE)
 
 PROXY_DEFAULTS = {"dom_proxy_text_chars": 1200, "chrome_text_weight": 0.1, "chrome_text_cap": 400}
 
@@ -60,7 +95,7 @@ DEFAULT_THRESHOLDS = {
     "orientation.content_not_obstructed": {"max_overlay_coverage": 0.4},
     "orientation.viewport_meta": {},
     "orientation.value_proposition": {"first_viewport_px": 800, "min_signal_score": 1,
-                                      **PROXY_DEFAULTS},
+                                      "max_vague_markers": 2, **PROXY_DEFAULTS},
     "orientation.legibility": {"min_body_font_px": 14},
 }
 
@@ -287,8 +322,8 @@ def _role_of(tag) -> str:
 def chrome_kind(tag) -> str | None:
     """`"nav"`, `"banner"`, `"floating"` or None — landmarks and ARIA roles only.
 
-    Deliberately not class or id based: PLAN §8 forbids framework and CMS allowlists, and
-    `class="header"` means whatever the author wanted it to mean.
+    Deliberately not class or id based. A framework or CMS allowlist only ever fits the sites it
+    was written against, and `class="header"` means whatever the author wanted it to mean.
     """
     role = _role_of(tag)
     if tag.name in NAV_TAGS or role in NAV_ROLES:
@@ -647,23 +682,56 @@ def check_value_proposition(geometry, html, url, thresholds) -> dict:
                                f"little for a visitor to learn what you offer")
 
     lowered = text.lower()
+
+    # SPECIFICITY is the primary signal. Requiring a word from an 18-noun list failed "Emergency
+    # lock repair across Leeds" at high severity while passing example.com, which offers nothing at
+    # all — the list simply had no entry for locksmithing, and could never hold every trade on the
+    # web. Vocabulary is kept, but as extra positive evidence only: a word missing from the list
+    # can never cause a failure.
+    anchored = bool(_ANCHOR_NUMBER_RE.search(text)) or has_proper_noun(text)
     found_verbs = [v for v in verbs if re.search(r"\b" + re.escape(v) + r"\w*\b", lowered)]
     found_nouns = [n for n in nouns if re.search(r"\b" + re.escape(n) + r"s?\b", lowered)]
-    score = (1 if found_verbs else 0) + (1 if found_nouns else 0)
-    minimum = int(thresholds.get("min_signal_score", 1))
-    measurement = f"signal score {score} (threshold {minimum})"
+    # BOTH kinds of vocabulary, not either. A single incidental hit is not evidence of anything:
+    # example.com passed on the link label "Learn more" matching the action verb "learn", which
+    # says nothing about what the page offers. Requiring a verb AND a noun restores the two-signal
+    # idea the original scoring had, while the anchor path covers every trade and product category
+    # the lists could never enumerate.
+    vocabulary = bool(found_verbs and found_nouns)
 
-    if score >= minimum + 1:
-        return result("orientation.value_proposition", "pass", measurement=measurement,
-                      page_url=url, reason=note,
-                      evidence=f"Headline area states an action and an offering: {heading_text}")
-    if score >= minimum:
+    # The mirror image, and the reason an open-ended list is safe HERE: vague markers only ever
+    # subtract. A phrase missing from this list can never cause a failure, whereas a product
+    # category missing from the offering nouns used to cause one on every unseen trade.
+    markers = [m.lower() for m in thresholds.get("vague_markers", [])]
+    vague_hits = [m for m in markers if m in lowered]
+    filler = len(vague_hits) >= int(thresholds.get("max_vague_markers", 2))
+
+    specific = anchored or vocabulary
+    measurement = (f"anchor={'y' if anchored else 'n'} vocabulary={'y' if vocabulary else 'n'} "
+                   f"filler={len(vague_hits)} (cap {thresholds.get('max_vague_markers', 2)})")
+
+    # Filler CAPS the outcome rather than subtracting from it. Subtracting let one proper noun
+    # rescue a hero carrying seven filler phrases, because anchor + vocabulary outran the penalty:
+    # a page can name itself and still say nothing about what it offers.
+    if filler:
+        if not specific:
+            return result("orientation.value_proposition", "fail", measurement=measurement,
+                          page_url=url, reason=note,
+                          evidence=f"Headline area is generic filler with nothing specific in it: "
+                                   f"{heading_text}")
         return result("orientation.value_proposition", "partial", measurement=measurement,
                       page_url=url, reason=note,
-                      evidence=f"Headline area hints at the offering but not clearly: {heading_text}")
-    return result("orientation.value_proposition", "fail", measurement=measurement, page_url=url,
-                  reason=note,
-                  evidence=f"Headline area does not say what you do or offer: {heading_text}")
+                      evidence=f"Headline area says something specific but it is buried in "
+                               f"generic filler: {heading_text}")
+
+    if specific:
+        return result("orientation.value_proposition", "pass", measurement=measurement,
+                      page_url=url, reason=note,
+                      evidence=f"Headline area names something specific: {heading_text}")
+    # Readable, no filler, but nothing concrete. Partial rather than fail, because this check is
+    # heuristic and language-gated, and a borderline call should take the softer verdict.
+    return result("orientation.value_proposition", "partial", measurement=measurement,
+                  page_url=url, reason=note,
+                  evidence=f"Headline area is readable but names nothing specific: {heading_text}")
 
 
 def check_legibility(geometry, url, thresholds) -> dict:

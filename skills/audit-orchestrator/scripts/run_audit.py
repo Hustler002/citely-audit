@@ -5,7 +5,7 @@ Usage:
   python run_audit.py --url https://example.com
   python run_audit.py --html-file page.html          # offline, zero network
 
-Pipeline (PLAN.md §3):
+Pipeline:
   Input -> Safe Fetch -> Render -> Normalized Artifact -> Analysis -> Findings -> Scoring -> Report
            (this file owns ALL network I/O)          |  (pure subprocesses)          |
                                                      +-- single cross-boundary contract
@@ -36,6 +36,7 @@ import time
 from pathlib import Path
 
 import _artifact as artifact_mod
+import _narrative as narrative
 import _render as render_mod
 import _safe_fetch as fetch_mod
 import _scoring as scoring
@@ -116,8 +117,31 @@ ANALYZERS = [
     ("engagement-orientation-audit", "engagement_orientation.py"),
 ]
 
+# The advisor is NOT an analyzer and is deliberately kept out of the list above: it emits advice,
+# not check states, it runs after scoring rather than before it, and it takes a different argument
+# set. Folding it into the fan-out would mean one loop pretending two contracts are the same one.
+ADVISOR = ("remediation-advisor", "advise.py")
+
+# How a child process's output is decoded. `text=True` alone decodes with
+# `locale.getpreferredencoding(False)` — cp1252 on a default Windows install — while we explicitly
+# tell the child to WRITE utf-8 via PYTHONIOENCODING. That mismatch has two failure modes, and the
+# quiet one is worse:
+#
+#   * SILENT CORRUPTION, the common case. Any non-ASCII evidence comes back mojibake: "café" as
+#     "cafÃ©", Devanagari as "à¤°à¤¾à¤œ…". The audit completes and the report is wrong.
+#   * A CRASH, when a byte lands on one of the five cp1252 has no mapping for (0x81, 0x8d, 0x8f,
+#     0x90, 0x9d). `subprocess`'s reader thread raises, the exception is swallowed, and `stdout`
+#     is left as None — which is how a Hindi page produced `TypeError: object of type 'NoneType'
+#     has no len()` and took the whole audit down.
+#
+# `errors="replace"` because this is the boundary holding page-derived bytes: a malformed sequence
+# must degrade one character, never kill the run.
+CHILD_TEXT = {"text": True, "encoding": "utf-8", "errors": "replace"}
+
 ANALYZER_TIMEOUT_S = 60
+ADVISOR_TIMEOUT_S = 30
 MAX_ANALYZER_STDOUT = 8 * 1024 * 1024
+EMPTY_ADVICE = {"corrective": [], "recommendations": []}
 
 # States that constitute a reportable defect. `partial` counts: a title that exists but is far too
 # long is a genuine, actionable problem, and omitting it would be a miss.
@@ -142,6 +166,36 @@ def _analyzer_env() -> dict:
     return env
 
 
+def forward_child_stderr(skill: str, raw) -> None:
+    """Relay a child's diagnostics, tagged, capped, and unable to kill the run.
+
+    Two hazards, both reachable on a non-English site. The stream may be None, because a decode
+    failure in `subprocess`'s reader thread is swallowed and leaves the attribute unset. And the
+    text may be unprintable on the parent's OWN stderr: a cp1252 console raises UnicodeEncodeError
+    on Devanagari, so merely forwarding a child's message could take the audit down. The child is
+    the component holding page-derived text, so neither may be fatal.
+    """
+    if not raw:
+        return
+    text = raw if isinstance(raw, str) else str(raw)
+    for line in text[:MAX_FORWARDED_STDERR].splitlines():
+        if line.strip():
+            _write_safely(sys.stderr, f"[{skill}] {line}\n")
+    if len(text) > MAX_FORWARDED_STDERR:
+        _write_safely(sys.stderr, f"[{skill}] ... stderr truncated at {MAX_FORWARDED_STDERR} chars\n")
+
+
+def _write_safely(stream, text: str) -> None:
+    """Write text the stream may not be able to encode, without ever raising."""
+    try:
+        stream.write(text)
+    except UnicodeEncodeError:
+        encoding = getattr(stream, "encoding", None) or "ascii"
+        stream.write(text.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+    except Exception:
+        pass
+
+
 def run_analyzer(skill: str, script: str, artifact_path: Path, errors: list,
                  deadline: float | None) -> list:
     """Invoke one analyzer skill as a subprocess and parse its check states.
@@ -162,8 +216,8 @@ def run_analyzer(skill: str, script: str, artifact_path: Path, errors: list,
     try:
         proc = subprocess.run(
             [sys.executable, str(path), "--artifact", str(artifact_path), "--config", str(CHECKS_PATH)],
-            capture_output=True, text=True, timeout=timeout, cwd=str(REPO_ROOT),
-            env=_analyzer_env(),
+            capture_output=True, timeout=timeout, cwd=str(REPO_ROOT),
+            env=_analyzer_env(), **CHILD_TEXT,
         )
     except subprocess.TimeoutExpired:
         errors.append({"stage": "analyze", "type": "timeout", "message": f"{skill}: exceeded {timeout}s"})
@@ -177,27 +231,114 @@ def run_analyzer(skill: str, script: str, artifact_path: Path, errors: list,
     # were being swallowed entirely rather than reaching the operator. Forward them, tagged and
     # capped: they are the only diagnostic a failing analyzer produces, but the child is also the
     # component holding page-derived text, so it does not get an unbounded channel.
-    if proc.stderr:
-        for line in proc.stderr[:MAX_FORWARDED_STDERR].splitlines():
-            if line.strip():
-                sys.stderr.write(f"[{skill}] {line}\n")
-        if len(proc.stderr) > MAX_FORWARDED_STDERR:
-            sys.stderr.write(f"[{skill}] ... stderr truncated at {MAX_FORWARDED_STDERR} chars\n")
+    forward_child_stderr(skill, proc.stderr)
 
     if proc.returncode != 0:
         errors.append({"stage": "analyze", "type": "exit_code",
                        "message": f"{skill}: exited {proc.returncode}"})
-    if len(proc.stdout) > MAX_ANALYZER_STDOUT:
+    stdout = proc.stdout or ""
+    if len(stdout) > MAX_ANALYZER_STDOUT:
         errors.append({"stage": "analyze", "type": "oversized_output", "message": skill})
         return []
 
     try:
-        rows = json.loads(proc.stdout or "[]")
+        rows = json.loads(stdout or "[]")
     except json.JSONDecodeError:
         errors.append({"stage": "analyze", "type": "bad_json",
                        "message": f"{skill}: stdout was not valid JSON"})
         return []
     return rows if isinstance(rows, list) else []
+
+
+def run_advisor(workdir: Path, artifact_path: Path, findings: list, resolved: dict,
+                errors: list, deadline: float | None) -> dict:
+    """Ask remediation-advisor for snippets and proactive suggestions.
+
+    Enrichment, not analysis. Every failure here costs the reader their copy-paste snippets and
+    nothing else: findings keep the registry's prose remediation, the score is untouched, and the
+    report stays schema-valid. That is why it returns empty advice rather than raising.
+
+    It receives the resolved check states as well as the findings, because a proactive suggestion
+    has to know what PASSED. Findings only carry what failed, and a suggestion built from that
+    alone would repeat a defect the reader has already been told about.
+    """
+    skill, script = ADVISOR
+    path = SKILLS_DIR / skill / "scripts" / script
+    if not path.exists():
+        errors.append({"stage": "advise", "type": "missing", "message": f"{skill}: script not found"})
+        return dict(EMPTY_ADVICE)
+
+    timeout = ADVISOR_TIMEOUT_S
+    if deadline is not None:
+        timeout = max(1, min(timeout, int(deadline - time.monotonic())))
+
+    try:
+        findings_path = workdir / "findings.json"
+        states_path = workdir / "check-states.json"
+        findings_path.write_text(json.dumps(findings), encoding="utf-8")
+        states_path.write_text(
+            json.dumps({cid: r.state for cid, r in resolved.items()}), encoding="utf-8")
+        proc = subprocess.run(
+            [sys.executable, str(path), "--artifact", str(artifact_path),
+             "--findings", str(findings_path), "--check-states", str(states_path),
+             "--config", str(CHECKS_PATH)],
+            capture_output=True, timeout=timeout, cwd=str(REPO_ROOT),
+            env=_analyzer_env(), **CHILD_TEXT,
+        )
+    except subprocess.TimeoutExpired:
+        errors.append({"stage": "advise", "type": "timeout", "message": f"{skill}: exceeded {timeout}s"})
+        return dict(EMPTY_ADVICE)
+    except Exception as exc:
+        errors.append({"stage": "advise", "type": "spawn_failed",
+                       "message": f"{skill}: {type(exc).__name__}"})
+        return dict(EMPTY_ADVICE)
+
+    forward_child_stderr(skill, proc.stderr)
+
+    if proc.returncode != 0:
+        errors.append({"stage": "advise", "type": "exit_code",
+                       "message": f"{skill}: exited {proc.returncode}"})
+    stdout = proc.stdout or ""
+    if len(stdout) > MAX_ANALYZER_STDOUT:
+        errors.append({"stage": "advise", "type": "oversized_output", "message": skill})
+        return dict(EMPTY_ADVICE)
+
+    try:
+        advice = json.loads(stdout or "{}")
+    except json.JSONDecodeError:
+        errors.append({"stage": "advise", "type": "bad_json",
+                       "message": f"{skill}: stdout was not valid JSON"})
+        return dict(EMPTY_ADVICE)
+    if not isinstance(advice, dict):
+        return dict(EMPTY_ADVICE)
+    return {"corrective": advice.get("corrective") if isinstance(advice.get("corrective"), list) else [],
+            "recommendations": advice.get("recommendations")
+            if isinstance(advice.get("recommendations"), list) else [],
+            # Carried through so an EMPTY recommendations list is explainable rather than
+            # mysterious: it says which detectors were suppressed to avoid repeating a finding and
+            # which stayed silent on language grounds. Silence with no account of itself is
+            # indistinguishable from a broken stage.
+            "diagnostics": advice.get("diagnostics") if isinstance(advice.get("diagnostics"), dict) else {}}
+
+
+def apply_advice(findings: list, advice: dict) -> None:
+    """Merge corrective advice into the findings, in place, by finding id.
+
+    Keyed by finding id and not by check id: the same check can fail on more than one page, and a
+    reader following F-004 must not be handed F-002's address. A finding with no entry keeps the
+    registry's prose remediation, which is why the merge only ever ADDS fields.
+    """
+    by_id = {entry.get("finding_id"): entry for entry in advice.get("corrective") or []
+             if isinstance(entry, dict) and entry.get("finding_id")}
+    for finding in findings:
+        entry = by_id.get(finding.get("id"))
+        if not entry:
+            continue
+        action = finding.setdefault("suggested_action", {})
+        for field in ("target", "snippet", "validation", "placeholders_remaining"):
+            value = entry.get(field)
+            if value:
+                action[field] = value
 
 
 def to_check_results(rows: list, registry, errors: list) -> list:
@@ -232,7 +373,7 @@ def to_check_results(rows: list, registry, errors: list) -> list:
 def build_findings(resolved: dict, registry, config: dict, raw_registry: dict) -> list:
     """Turn failing checks into findings, using the registry as the single source of report wording.
 
-    Each finding carries the full reasoning chain the rubric asks for:
+    Each finding carries a complete reasoning chain, so a reader can retrace the verdict:
     signal -> measurement -> threshold -> evidence -> impact -> remediation.
     """
     findings = []
@@ -348,7 +489,7 @@ def _assert_no_ssrf_bypass_via_cli(parser) -> None:
 
 # --- main ---------------------------------------------------------------------------------------
 def audit(url: str | None, html_file: str | None, config: dict, *,
-          allow_external: bool = False, force_tier: str | None = None) -> dict:
+          force_tier: str | None = None) -> dict:
     started = time.monotonic()
     deadline = fetch_mod.deadline_from_config(config, started)
     errors: list = []
@@ -363,7 +504,7 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         artifact = {
             "requested_url": f"file://{html_file}", "final_url": f"file://{html_file}",
             "fetched_at": artifact_mod.utc_now(),
-            "user_agent": config.get("fetch", {}).get("user_agent", ""),
+            "user_agent": fetch_mod.user_agent(config),
             "robots": {"checked": False, "allowed": True, "crawl_delay": None,
                        "status": None, "sitemaps": []},
             "ai_crawlers": {"determinable": False, "allowed": {}, "blocked": []},
@@ -384,41 +525,73 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         site = (artifact.get("final_url") or url or "").replace("https://", "").replace("http://", "")
         site = site.split("/")[0] or (url or "unknown")
 
-    # --- analyze -------------------------------------------------------------------------------
+    # --- analyze, score, advise ------------------------------------------------------------------
+    # The temp directory spans all three stages because the advisor needs the same artifact the
+    # analyzers read, and the findings do not exist until scoring has run. The `finally` still
+    # guarantees removal: the directory is 0700 and holds page-derived HTML, so a scoring exception
+    # must not leave it on disk.
+    import shutil
+    import tempfile
+
     rows: list = []
+    advice = dict(EMPTY_ADVICE)
     tmpdir = None
     try:
-        import tempfile
-        tmpdir = tempfile.mkdtemp(prefix="citely-")
-        os.chmod(tmpdir, 0o700)
-        artifact_path = Path(tmpdir) / "artifact.json"
-        artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
-        for skill, script in ANALYZERS:
-            rows.extend(run_analyzer(skill, script, artifact_path, errors, deadline))
-    except Exception as exc:
-        errors.append({"stage": "analyze", "type": "setup_failed", "message": type(exc).__name__})
+        artifact_path = None
+        try:
+            tmpdir = tempfile.mkdtemp(prefix="citely-")
+            os.chmod(tmpdir, 0o700)
+            artifact_path = Path(tmpdir) / "artifact.json"
+            artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+            for skill, script in ANALYZERS:
+                rows.extend(run_analyzer(skill, script, artifact_path, errors, deadline))
+        except Exception as exc:
+            errors.append({"stage": "analyze", "type": "setup_failed",
+                           "message": type(exc).__name__})
+
+        # --- score -------------------------------------------------------------------------
+        results = to_check_results(rows, registry, errors)
+        language_supported = bool((artifact.get("language") or {}).get("supported"))
+        resolved = scoring.resolve_states(
+            results, registry, config,
+            language_supported=language_supported,
+            blocked_before_fetch=bool(artifact.get("blocked_before_fetch")))
+
+        cat_scores = scoring.category_scores(resolved, registry, config)
+        overall = scoring.overall_score(cat_scores, config)
+        findings = scoring.assign_finding_ids(
+            build_findings(resolved, registry, config, raw_registry), config)
+        summary = scoring.summarize(
+            findings, cat_scores, overall,
+            scoring.score_confidence(resolved, registry, config),
+            coverage_ratio=scoring.coverage(resolved, registry, config),
+            cat_coverage=scoring.category_coverage(resolved, registry, config))
+
+        # --- the non-expert output layer ---------------------------------------------------
+        # Computed here, into the REPORT, not in a separate renderer, so a machine consumer
+        # piping the JSON gets the same plain reading a
+        # person gets. Presentation only — it reads the scores, it never changes them.
+        registry_categories = load_json(CHECKS_PATH).get("categories") or {}
+        reason_text = registry_categories.get("reasons") or {}
+        cat_coverage = summary.get("category_coverage") or {}
+        verdict, headline_reliable, caveat = narrative.overall_verdict(
+            overall, summary.get("coverage"), registry_categories)
+        summary["verdict"] = verdict
+        summary["headline_reliable"] = headline_reliable
+        summary["headline_caveat"] = caveat
+        summary["category_verdicts"] = narrative.category_verdicts(
+            cat_scores, cat_coverage, registry_categories)
+
+        # --- advise ------------------------------------------------------------------------
+        # Runs after scoring and cannot influence it: the summary above is already final, and the
+        # advisor only ever adds fields to findings that exist. Proactive items land in their own
+        # top-level list, outside the counts the schema's invariant governs.
+        if artifact_path is not None:
+            advice = run_advisor(Path(tmpdir), artifact_path, findings, resolved, errors, deadline)
+            apply_advice(findings, advice)
     finally:
         if tmpdir:
-            import shutil
             shutil.rmtree(tmpdir, ignore_errors=True)
-
-    # --- score ---------------------------------------------------------------------------------
-    results = to_check_results(rows, registry, errors)
-    language_supported = bool((artifact.get("language") or {}).get("supported"))
-    resolved = scoring.resolve_states(
-        results, registry, config,
-        language_supported=language_supported,
-        blocked_before_fetch=bool(artifact.get("blocked_before_fetch")))
-
-    cat_scores = scoring.category_scores(resolved, registry, config)
-    overall = scoring.overall_score(cat_scores, config)
-    findings = scoring.assign_finding_ids(
-        build_findings(resolved, registry, config, raw_registry), config)
-    summary = scoring.summarize(
-        findings, cat_scores, overall,
-        scoring.score_confidence(resolved, registry, config),
-        coverage_ratio=scoring.coverage(resolved, registry, config),
-        cat_coverage=scoring.category_coverage(resolved, registry, config))
 
     partial, reason = _partial_reason(artifact, resolved, errors)
     pages = [p for p in (artifact.get("pages") or []) if isinstance(p, dict)]
@@ -431,7 +604,10 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         "diagnostics": {
             "total_ms": int((time.monotonic() - started) * 1000),
             "crawl_ms": (artifact.get("timing") or {}).get("total_ms", 0),
-            "playwright_available": bool(rendered.get("available")),
+            # Whether a browser was FOUND, not whether the render succeeded. Those are
+            # different facts, and merging them reported "no browser" on a machine that had
+            # just run one — sending a reader to reinstall something that was never missing.
+            "playwright_available": bool(rendered.get("browser_available")),
             "render_mode": rendered.get("mode") or render_mod.TIER_B,
             # How the render went, not merely whether it happened. "salvaged" means the navigation
             # milestone timed out and the DOM was harvested anyway, which is a Tier-A result a
@@ -439,14 +615,22 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
             "render_nav_state": rendered.get("nav_state"),
             "render_wait_strategy": rendered.get("wait_strategy"),
             "pages_checked": [p.get("url") for p in pages],
+            # Only pages that did NOT load normally. Every audited URL is already in pages_checked,
+            # so an entry per successful page only restated it with status "ok". Listing just the
+            # exceptions keeps a skipped, blocked or failed page impossible to miss.
             "pages": [{"url": p.get("url"), "status": p.get("status", "error"),
                        "http_status": (p.get("raw") or {}).get("status"),
-                       "reason": p.get("blocked_kind") or p.get("skip_reason")} for p in pages],
+                       "reason": p.get("blocked_kind") or p.get("skip_reason")}
+                      for p in pages if p.get("status", "error") != "ok"],
             "language_detected": (artifact.get("language") or {}).get("detected"),
             "language_supported": language_supported,
             "user_agent": artifact.get("user_agent", ""),
             "robots_checked": bool((artifact.get("robots") or {}).get("checked")),
-            "external_lookup": bool(allow_external),
+            # Always false: no third-party corroboration lookup is implemented, so this discloses
+            # that every piece of evidence in the report came from the audited pages themselves.
+            # It is NOT a setting — there is no flag that can make it true.
+            "external_lookup": False,
+            "advisor": advice.get("diagnostics") or {},
             "checks_evaluated": sum(1 for r in resolved.values() if r.state != scoring.UNKNOWN),
             "checks_unknown": sum(1 for r in resolved.values() if r.state == scoring.UNKNOWN),
             "errors": errors,
@@ -454,8 +638,42 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         "partial": partial,
         "partial_reason": reason,
         "findings": findings,
-        "recommendations": [],   # populated by remediation-advisor in Phase 7
+        # The same findings ordered by what fixing them is worth. findings[] is ordered by severity
+        # so F-001… stay stable across runs, which is why it cannot also carry the ROI ranking.
+        "next_actions": narrative.next_actions(findings),
+        "not_checked": narrative.what_could_not_be_checked(
+            resolved, registry, cat_coverage, raw_registry, reason_text),
+        # Proactive suggestions from remediation-advisor. Deliberately a separate list: the
+        # mandated schema floor requires total_findings == critical + high + medium, so anything
+        # that is not a defect must stay outside findings[] or it breaks that invariant — and it
+        # would also let beyond-problem advice move a score it has no business touching.
+        "recommendations": advice.get("recommendations") or [],
     }
+
+
+def write_report(report: dict, stream) -> None:
+    """Emit the report as UTF-8, whatever the console happens to be set to.
+
+    RFC 8259: JSON for interchange SHALL be encoded in UTF-8, so emitting UTF-8 is correct rather
+    than merely convenient. A default Windows console is cp1252 and raises UnicodeEncodeError on
+    any script it has no mapping for, which would mean an audit that ran perfectly and then died
+    while printing its own result.
+
+    Reconfiguring the stream is preferred, because it produces real UTF-8 bytes that a consumer
+    redirecting to a file receives losslessly. Where the stream cannot be reconfigured — a pytest
+    capture object, a plain StringIO — every non-ASCII character is escaped instead. That output is
+    still valid JSON and still lossless; it is simply less pleasant to read.
+    """
+    escaped = False
+    try:
+        stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError, OSError):
+        declared = (getattr(stream, "encoding", "") or "").lower().replace("-", "")
+        escaped = declared not in ("utf8", "")
+
+    json.dump(report, stream, indent=2, ensure_ascii=escaped)
+    stream.write("\n")
+    stream.flush()
 
 
 def validate_report(report: dict) -> list:
@@ -479,8 +697,12 @@ def main(argv=None) -> int:
     source.add_argument("--url", help="Homepage URL to audit.")
     source.add_argument("--html-file", help="Local HTML file to audit offline (no network).")
     parser.add_argument("--config", default=str(CONFIG_PATH))
-    parser.add_argument("--allow-external", action="store_true",
-                        help="Permit the optional Wikidata corroboration lookup.")
+    # There is deliberately NO --allow-external flag. It existed for nine phases and did nothing:
+    # it reached `diagnostics.external_lookup` and stopped there, while `external_corroboration`
+    # was hardcoded to None and no Wikidata request was ever issued. A flag that advertises a
+    # capability the code does not have is worse than an absent one, because a reviewer who passes
+    # it is told the lookup ran. If one is ever built, the crawl artifact already declares the
+    # `external_corroboration` slot for its result.
     parser.add_argument("--ci", action="store_true",
                         help="Exit non-zero when any critical finding is present.")
     _assert_no_ssrf_bypass_via_cli(parser)
@@ -502,8 +724,7 @@ def main(argv=None) -> int:
     # stray `print()` can put a byte in front of the JSON.
     with stdout_reserved_for_report() as report_stream:
         try:
-            report = audit(args.url, args.html_file, config,
-                           allow_external=args.allow_external)
+            report = audit(args.url, args.html_file, config)
         except Exception as exc:
             # Belt and braces: the stages already trap their own failures, but the entrypoint must
             # still emit something valid rather than a traceback.
@@ -518,9 +739,7 @@ def main(argv=None) -> int:
         for problem in validate_report(report):
             log.error("report validation: %s", problem)
 
-    json.dump(report, report_stream, indent=2, ensure_ascii=False)
-    report_stream.write("\n")
-    report_stream.flush()
+    write_report(report, report_stream)
 
     if args.ci and report.get("summary", {}).get("critical", 0) > 0:
         return 1

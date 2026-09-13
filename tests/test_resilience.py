@@ -1,4 +1,4 @@
-"""Resilience suite — hostile and malformed inputs across Phases 2-5.
+"""Resilience suite — hostile and malformed inputs across the acquisition and analysis layers.
 
 Written after an adversarial probe found three real defects:
 
@@ -11,7 +11,7 @@ Written after an adversarial probe found three real defects:
      heading `top` as a string) silently converted real checks into `unknown`.
 
 The guarantee these tests pin: **an analyzer always emits exactly its declared checks, every id
-valid, whatever it is fed.** That is what makes the orchestrator safe to build on in Phase 6.
+valid, whatever it is fed.** That is what makes the orchestrator safe to build on.
 """
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ def test_output_always_schema_valid(module, label, raw_registry):
 
 @pytest.mark.parametrize("label", sorted(MALFORMED_ARTIFACTS))
 def test_scoring_engine_accepts_output_from_malformed_input(label, registry, config, raw_registry):
-    """THE Phase-6 guarantee: whatever the analyzers are fed, the orchestrator can score it.
+    """The orchestration guarantee: whatever the analyzers are fed, the orchestrator can score it.
 
     This is the test that would have caught the function-name-as-check_id defect.
     """

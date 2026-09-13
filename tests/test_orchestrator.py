@@ -1,4 +1,4 @@
-"""Phase 6 — the orchestrator entrypoint.
+"""The orchestrator entrypoint.
 
 This is the first point at which Citely is a usable tool, so these tests pin the properties a
 consumer depends on: stdout is machine-readable, the report always validates, the run is
@@ -132,7 +132,8 @@ def test_findings_state_the_problem_not_the_ideal(broken_report):
 
 
 def test_every_finding_carries_the_reasoning_chain(broken_report):
-    """signal -> measurement -> threshold -> evidence -> impact -> remediation (PLAN §6.5)."""
+    """Every finding carries its full reasoning chain: signal -> measurement -> threshold ->
+    evidence -> impact -> remediation."""
     for f in broken_report["findings"]:
         assert f["signal"] and f["impact"] and f["evidence"]
         assert f["suggested_action"]["summary"]
@@ -234,6 +235,25 @@ def test_unreachable_host_still_produces_a_valid_report(config):
     assert report["diagnostics"]["errors"]
 
 
+def test_the_page_list_names_only_pages_that_did_not_load(healthy_report, local_config):
+    """Loaded pages are already in pages_checked; the page list exists to surface exceptions.
+
+    An entry per successful page used to restate every audited URL with status "ok", which buried
+    the one line a reader needs when a page was blocked or failed.
+    """
+    diagnostics = healthy_report["diagnostics"]
+    assert diagnostics["pages_checked"], "every audited URL must still be listed"
+    assert diagnostics["pages"] == []
+
+    with fixture_server.running() as base:
+        blocked = run_audit.audit(f"{base}/consent-wall", None, local_config, force_tier="heuristic")
+    pages = blocked["diagnostics"]["pages"]
+    assert pages, "a blocked page must never be dropped from the page list"
+    assert all(p["status"] != "ok" for p in pages), pages
+    assert {p["url"] for p in pages} <= set(blocked["diagnostics"]["pages_checked"])
+    assert any(p["status"] == "blocked" and p["reason"] == "consent_wall" for p in pages), pages
+
+
 def test_unknown_check_ids_from_an_analyzer_are_ignored(config):
     registry = S.load_registry()
     errors = []
@@ -303,7 +323,7 @@ def test_end_to_end_against_fixture_server(local_config):
 
 # --- Finding wording must match the check STATE ----------------------------------------------------
 # Two mirrored defects found in production runs:
-#   * Phase 6: a FAILING check used the positive title ("Mobile viewport is declared" when missing).
+#   * A FAILING check used the positive title ("Mobile viewport is declared" when it was missing).
 #   * github.com: a PARTIAL check used the absolute failure title ("No organization or person entity
 #     declared") while its own evidence said identity WAS declared via Open Graph.
 

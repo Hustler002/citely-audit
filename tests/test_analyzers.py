@@ -1,7 +1,7 @@
-"""Phase 4 — the two structural analyzers, and their integration with the scoring engine.
+"""The two structural analyzers, and their integration with the scoring engine.
 
-These are the first components that form an opinion about a site, so the tests focus on the rubric's
-top criterion: correct detection with few misses AND few false positives.
+These are the components that form an opinion about a site, so the tests focus on detection
+accuracy: few misses AND few false positives, which pull in opposite directions.
 """
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def test_every_check_id_exists_in_registry(module, registry, raw_registry):
 
 
 def test_analyzers_cover_their_whole_category(registry, raw_registry):
-    """Between them, Phase 4 must fully cover two of the four categories."""
+    """Between them, the two structural analyzers must fully cover two of the four categories."""
     crawl = {r["check_id"] for r in CRE.analyze(artifact_for("<html>x</html>"), raw_registry)}
     entity = {r["check_id"] for r in ENT.analyze(artifact_for("<html>x</html>"), raw_registry)}
     assert crawl == {c.id for c in registry.by_category("ai_discoverability")}
@@ -129,7 +129,7 @@ def test_broken_fixture_fails_entity_checks(raw_registry):
     assert st["entity.name_consistency"] in ("fail", "partial")
 
 
-# --- False-positive guards (rubric penalises these as hard as misses) ---------------------------
+# --- False-positive guards (a false alarm costs a reader more than a miss) -----------------------
 def test_short_server_rendered_page_is_not_a_render_failure(raw_registry):
     """The bug this caught during development: a small honest page flagged as JS-dependent.
 
@@ -371,7 +371,7 @@ def _score(html, registry, config):
 
 
 def test_analyzer_output_feeds_scoring_engine(registry):
-    """End-to-end proof that Phase 4 output is consumable by Phase 1's engine."""
+    """End-to-end proof that analyzer output is consumable by the scoring engine."""
     config = S.load_config()
     html = (FIXTURES / "healthy_page.html").read_text(encoding="utf-8")
     cats, _ = _score(html, registry, config)
@@ -415,7 +415,8 @@ def test_dependency_suppression_applies_to_real_analyzer_output(registry):
 
 # --- Drift guards for deliberately duplicated code ------------------------------------------------
 # agentskills.io requires self-contained skill folders, so helpers are duplicated across skills by
-# DESIGN rather than shared by import. CLAUDE.md states "drift is caught by tests" — these are those
+# DESIGN rather than shared by import, so duplication is the price of each skill staying
+# independently runnable. These tests are what stop the copies drifting — they are
 # tests, so the claim is backed rather than aspirational.
 
 def test_spa_markers_match_config():

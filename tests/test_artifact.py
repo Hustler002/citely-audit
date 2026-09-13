@@ -1,4 +1,4 @@
-"""Phase 3 — page selection, rendering, and artifact assembly.
+"""Page selection, rendering, and artifact assembly.
 
 Runs against the localhost fixture server, so the whole acquisition pipeline is exercised for real
 (sockets, redirects, robots, sitemaps) with zero external egress.
@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -68,7 +69,8 @@ def test_normalize_strips_fragment():
 
 # --- Page selection is structural, not lexical --------------------------------------------------
 def test_selection_is_language_neutral(config):
-    """The core §8 guarantee: a non-English site must select just as many pages as an English one.
+    """The core language-neutrality guarantee: a non-English site must select just as many pages as
+    an English one.
 
     The old English keyword approach would have found zero extra pages here.
     """
@@ -294,14 +296,52 @@ def test_403_treated_as_bot_challenge():
 
 
 # --- Language detection --------------------------------------------------------------------------
-@pytest.mark.parametrize("html,expected", [
+LANGUAGE_CASES = [
     ('<html lang="en">', "en"),
     ('<html lang="en-GB">', "en-gb"),
     ('<html lang="de">', "de"),
     ("<html>", None),
-])
+    # Unquoted values are valid HTML and common on minified pages. Requiring quotes discarded a
+    # real declaration on smashingmagazine.com, which ships `<html lang=en>`.
+    ("<html lang=en>", "en"),
+    ("<html lang=en-GB>", "en-gb"),
+    ("<html lang=en><head><title>x</title>", "en"),
+    ('<html class="no-js" lang=de>', "de"),
+    ("<html lang = fr dir=ltr>", "fr"),
+    # Accepting unquoted values must not start accepting things that are not language tags.
+    ('<html lang="">', None),
+    ("<html lang=>", None),
+    ("<html lang=e>", None),
+    ("<html lang=english>", None),
+    ("<html lang=en_US>", None),
+]
+
+
+@pytest.mark.parametrize("html,expected", LANGUAGE_CASES)
 def test_language_detection(html, expected):
     assert A.detect_language(html)[0] == expected
+
+
+@pytest.mark.parametrize("html,expected", LANGUAGE_CASES)
+def test_every_copy_of_language_detection_agrees(tmp_path, html, expected):
+    """Each skill carries its own copy, by design, so each must read a declaration the same way.
+
+    Run through each skill's real offline entry point rather than comparing regex text, so a copy
+    that is changed in how it is CALLED is caught as well as one changed in its pattern.
+    """
+    for sub in ("engagement-orientation-audit", "quotability-density-audit", "remediation-advisor"):
+        path = str(REPO_ROOT / "skills" / sub / "scripts")
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    import advise as AD
+    import engagement_orientation as EO
+    import quotability_density as QD
+
+    page = tmp_path / "page.html"
+    page.write_text(html + "<body><p>Body.</p></body></html>", encoding="utf-8")
+    detected = {name: module.artifact_from_html_file(str(page))["language"]["detected"]
+                for name, module in (("engagement", EO), ("quotability", QD), ("advisor", AD))}
+    assert detected == {"engagement": expected, "quotability": expected, "advisor": expected}, detected
 
 
 def test_language_support_gate(config):
@@ -396,20 +436,88 @@ def test_compression_bomb_refused_against_live_server(config, server):
     assert result.error_kind == "too_large"
 
 
-def test_deadline_marks_later_pages_skipped(config, server):
-    import time
+class SteppedClock:
+    """A clock the test advances on purpose, instead of hoping the real one cooperates.
+
+    Only `_artifact` sees this — it is installed as that module's `time` attribute, so
+    `_safe_fetch` keeps the real clock and the fixture-server fetches get their full real budget.
+    That separation is the point: the deadline must be live during acquisition and expired by the
+    time the page loop runs, and nothing about real elapsed time can be relied on to arrange that.
+    """
+
+    def __init__(self):
+        self.offset = 0.0
+
+    def monotonic(self):
+        return time.monotonic() + self.offset
+
+    def sleep(self, seconds):
+        time.sleep(seconds)
+
+
+def test_deadline_marks_later_pages_skipped(config, server, monkeypatch):
+    """Pages after the homepage are skipped once the global deadline has passed.
+
+    This test used to pass `deadline=time.monotonic() + 0.001` and accept either a skipped page OR
+    a single-page artifact. It failed roughly one run in six, and the cause was not CPU load:
+    **`time.monotonic()` on Windows is `GetTickCount64()` with a resolution of 15.625 ms**, so a
+    1 ms deadline is smaller than the clock can represent. Whether it had "expired" by the time the
+    page loop ran depended entirely on whether a tick boundary happened to fall during the crawl —
+    a coin toss, not a timing margin. The `or len(pages) == 1` escape hatch then hid the other half
+    of the problem, because a run where acquisition itself died on the deadline also counted as a
+    pass while proving nothing about skipping.
+
+    The clock is now driven explicitly: acquisition runs with 30 real seconds of budget, and the
+    deadline is pushed into the past the instant page selection returns. The loop check is
+    therefore expired on every iteration, on every machine, regardless of speed or load.
+
+    `timing.total_ms` in the resulting artifact is synthetic — it includes the jump — which is
+    irrelevant here and asserted nowhere.
+    """
+    clock = SteppedClock()
+    monkeypatch.setattr(A, "time", clock)
+
+    real_select = A.PS.select_pages
+
+    def select_then_expire_the_budget(*args, **kwargs):
+        candidates = real_select(*args, **kwargs)
+        clock.offset = 31.0          # strictly greater than the 30 s budget below
+        return candidates
+
+    monkeypatch.setattr(A.PS, "select_pages", select_then_expire_the_budget)
+
     artifact = A.build_artifact(f"{server}/", config, force_tier=R.TIER_B,
-                                deadline=time.monotonic() + 0.001)
-    statuses = [p["status"] for p in artifact["pages"]]
-    assert "skipped" in statuses or len(artifact["pages"]) == 1
+                                deadline=time.monotonic() + 30.0)
+
+    pages = artifact["pages"]
+    # No escape hatch: if the fixture server ever stops offering a second page, this test has
+    # nothing to measure and must say so rather than passing silently.
+    assert len(pages) >= 2, f"expected more than one candidate page, got {pages}"
+    assert pages[0]["status"] == "ok", "acquisition must succeed; only the LATER pages are skipped"
+
+    skipped = [p for p in pages[1:] if p["status"] == "skipped"]
+    assert skipped, f"no page was skipped despite an expired budget: {pages}"
+    assert all(p["skip_reason"] == "budget" for p in skipped)
 
 
-# --- Post-Phase-3 cleanup regressions ------------------------------------------------------------
+def test_pages_are_not_skipped_while_the_budget_is_intact(config, server):
+    """The control for the test above.
+
+    Without it, a skip caused by something other than the deadline — a broken fixture page, a
+    refused fetch — would still satisfy the assertions and the budget logic would go unmeasured.
+    """
+    artifact = A.build_artifact(f"{server}/", config, force_tier=R.TIER_B,
+                                deadline=time.monotonic() + 300.0)
+    assert len(artifact["pages"]) >= 2
+    assert not [p for p in artifact["pages"] if p["status"] == "skipped"]
+
+
+# --- Acquisition cleanup regressions -------------------------------------------------------------
 # Each test below pins a fix from the 8-issue cleanup. They exist because the original content-type
 # "fix" was inert and 211 green tests failed to notice — behaviour must be asserted, not assumed.
 
 def test_non_html_page_is_refused(config, server):
-    """PLAN.md §10 requires text/html only. Parsing JSON/PDF as HTML yields garbage findings."""
+    """Page content is restricted to text/html. Parsing JSON or PDF as HTML yields garbage findings."""
     artifact = A.build_artifact(f"{server}/not-html", config, force_tier=R.TIER_B)
     page = artifact["pages"][0]
     assert page["status"] == "error"
@@ -473,7 +581,7 @@ def test_unencoded_body_capped_without_content_length(config, server):
 
 
 def test_artifact_declares_all_emitted_fields(config, server):
-    """Guards schema drift: analyzers in Phase 4 depend on these keys being part of the contract."""
+    """Guards schema drift: the analyzers depend on these keys being part of the contract."""
     artifact = A.build_artifact(f"{server}/healthy", config, force_tier=R.TIER_B)
     declared = set(ARTIFACT_SCHEMA["properties"])
     assert set(artifact) - declared == set()
@@ -497,3 +605,144 @@ def test_no_dead_config_keys(config):
     assert "audit_user_agent_gate" not in config["robots"]
     assert "strategy" not in config["page_selection"]
     assert "default_when_undetected" not in config["language"]
+
+
+# =================================================================================================
+# Content encodings: decode what the stack supports, refuse the rest, never guess
+#
+# We advertise `Accept-Encoding: gzip, deflate`. Some servers answer in Brotli regardless: a CDN
+# returned `br` to this auditor even when asked for `identity`. With no Brotli decoder, urllib3
+# passed the compressed bytes through WITHOUT raising, so they arrived labelled `text/html`. Brotli
+# is now a pinned dependency and urllib3 decodes it. What the stack still cannot undo is refused
+# before the body is read, and a body that claims an encoding it does not contain is refused as
+# malformed. Either refusal leaves the page unread, so its checks resolve to `unknown`.
+# =================================================================================================
+@pytest.mark.parametrize("route,title", [
+    ("/gzipped-page", "Gzipped"),
+    ("/deflate-page", "Deflated"),
+    ("/brotli-page", "Brotli"),
+    ("/layered-gzip-br", "Layered"),   # two encodings applied in order, undone in reverse
+    ("/identity-page", "Identity"),    # explicitly "no encoding at all"
+])
+def test_each_supported_encoding_is_decoded_before_analysis(config, server, route, title):
+    result = SF.safe_get(f"{server}{route}", config)
+    assert result.error_kind is None, result.error
+    body = result.body or b""
+    assert body.startswith(b"<!DOCTYPE html>"), f"analyzers would be handed {body[:12]!r}"
+    assert f"<title>{title}</title>".encode() in body
+
+
+def test_brotli_is_decodable_with_the_pinned_dependency():
+    """The regression for the live failure: `br` was refused because nothing here could undo it."""
+    assert "br" in SF.decodable_encodings()
+    assert SF.undecodable_encodings("br") == []
+
+
+def test_the_pinned_brotli_bounds_what_one_call_can_inflate():
+    """Why the pin is exact.
+
+    urllib3 bounds Brotli output only through `output_buffer_limit`, which arrived in Brotli 1.2.0.
+    With an older release it decodes without a limit and merely warns. The streaming cap would still
+    stop the running total, but not how far a single chunk expands in memory before it is counted.
+
+    The limit is a bound, not an exact size: Brotli rounds it up to its own internal block. So the
+    assertion is that one limited call stays far below the whole payload, while an unlimited call
+    produces all of it at once.
+    """
+    import brotli
+    payload = brotli.compress(b"A" * 1_000_000)
+
+    bounded = brotli.Decompressor()
+    first = bounded.process(payload, output_buffer_limit=4096)
+    assert 0 < len(first) < 100_000, "a limited call must not inflate the whole payload at once"
+    assert not bounded.is_finished(), "the remainder must still be pending, not already produced"
+
+    unbounded = brotli.Decompressor().process(payload)
+    assert len(unbounded) == 1_000_000, "the control: with no limit it all arrives in one call"
+
+
+def test_a_server_that_sends_brotli_unasked_is_now_read(config, server):
+    """The live failure end to end: an unrequested `br` page becomes a readable page."""
+    artifact = A.build_artifact(f"{server}/brotli-page", config, force_tier="heuristic")
+    page = artifact["pages"][0]
+    assert page["status"] == "ok", page.get("skip_reason")
+    assert "<title>Brotli</title>" in page["raw"]["html"]
+
+
+def test_an_unsupported_encoding_is_refused_before_the_body_is_read(config, server):
+    result = SF.safe_get(f"{server}/compress-unrequested", config)
+    assert result.error_kind == "content_encoding"
+    assert "compress" in result.error
+    assert not result.body, "undecodable bytes must never be stored as page HTML"
+
+
+@pytest.mark.parametrize("route,encoding", [
+    ("/brotli-malformed", "br"),
+    ("/gzip-malformed", "gzip"),
+])
+def test_a_malformed_body_is_refused_with_a_clear_diagnostic(config, server, route, encoding):
+    """A body that claims an encoding it does not contain.
+
+    This used to surface as `error_kind="network"` carrying urllib3's message. Safe, since no bytes
+    reached the analyzers, but it blamed the connection for a corrupt payload.
+    """
+    result = SF.safe_get(f"{server}{route}", config)
+    assert result.error_kind == "content_encoding", result.error
+    assert f"content-encoding {encoding}" in result.error
+    assert "not valid" in result.error
+    assert not result.body
+
+
+def test_a_brotli_bomb_is_stopped_by_the_existing_cap(config, server):
+    """Adding a decoder must not open a way around the decompression cap."""
+    cfg = {**config, "fetch": {**config["fetch"], "max_decompressed_bytes": 1_000_000}}
+    result = SF.safe_get(f"{server}/brotli-bomb", cfg)
+    assert result.error_kind == "too_large"
+    assert not result.body
+
+
+@pytest.mark.parametrize("header", [None, "", "identity", "gzip", "deflate", "x-gzip", "br",
+                                    "GZIP", "BR", " gzip ", "identity, gzip", "gzip, br"])
+def test_supported_content_encodings_are_never_refused(header):
+    assert SF.undecodable_encodings(header) == []
+
+
+@pytest.mark.parametrize("header,stuck", [
+    ("compress", ["compress"]),
+    ("gzip, compress", ["compress"]),
+    ("br, compress", ["compress"]),
+    ("x-unknown", ["x-unknown"]),
+])
+def test_encodings_the_stack_cannot_undo_are_named(header, stuck):
+    assert SF.undecodable_encodings(header) == stuck
+
+
+def test_what_is_decodable_is_read_from_the_http_stack_not_hardcoded():
+    """`br` becomes decodable the moment a Brotli package is installed.
+
+    Hardcoding either answer would be wrong on half the machines this runs on, so the set comes
+    from urllib3 itself. If that is ever replaced by a literal, this test says so.
+    """
+    from urllib3.response import HTTPResponse
+    decodable = SF.decodable_encodings()
+    for name in HTTPResponse.CONTENT_DECODERS:
+        assert str(name).lower() in decodable
+    assert "identity" in decodable and "" in decodable
+    if "br" in {str(n).lower() for n in HTTPResponse.CONTENT_DECODERS}:
+        assert SF.undecodable_encodings("br") == []
+    else:
+        assert SF.undecodable_encodings("br") == ["br"]
+
+
+@pytest.mark.parametrize("route", ["/compress-unrequested", "/brotli-malformed"])
+def test_a_page_that_cannot_be_decoded_degrades_to_unknown_not_to_failure(config, server, route):
+    """The scoring consequence: an unreadable page is not a badly-built page.
+
+    It must land as `fetch_failed` with the checks unmeasured, never as a page that was read and
+    found wanting.
+    """
+    artifact = A.build_artifact(f"{server}{route}", config, force_tier="heuristic")
+    page = artifact["pages"][0]
+    assert page["status"] == "error"
+    assert page["skip_reason"] == "fetch_failed"
+    assert page["raw"]["html"] == ""

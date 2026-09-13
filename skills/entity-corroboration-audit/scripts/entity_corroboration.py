@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """entity-corroboration-audit (mechanic 4) — can an AI tell WHO this page is about, unambiguously?
 
-Pure consumer of the crawl artifact. ZERO network access, no exceptions. The optional Wikidata
-lookup lives in the orchestrator's fetch stage (left of the artifact boundary) and arrives here
-pre-fetched as `external_corroboration`.
+Pure consumer of the crawl artifact. ZERO network access, no exceptions. Authority is judged from
+the links the page itself publishes; there is no external lookup anywhere in this project. The
+artifact declares an `external_corroboration` slot for one, performed in the orchestrator's fetch
+stage if it is ever built, but none is implemented and no check here reads it.
 
 Usage:
   python entity_corroboration.py --artifact crawl_artifact.json [--config config/checks.json]
@@ -96,7 +97,14 @@ THIRD_PARTY_KEYS = ("author", "creator", "contributor", "editor", "sponsor", "tr
 # Name separators, so "Bakeshop | NE Portland Retail and Wholesale Bakery" and "Bakeshop" are
 # recognised as the same brand rather than as a contradiction.
 _NAME_SPLIT_RE = re.compile(r"\s*[|·–—•»«:/\-‐]\s*|\s+[-–]\s+")
-_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+# Keep letters and digits in ANY script, not just ASCII. `[^a-z0-9]+` erased every non-Latin
+# character, so a name written in its own script normalized to the EMPTY STRING and could never
+# match anything — including a byte-identical copy of itself. Measured: `デジタル庁` in <title> and
+# the same five characters in og:site_name were reported as corroborating neither each other nor
+# the domain. The same held for Greek, Cyrillic, Korean, Arabic and Devanagari, so every site
+# naming itself outside the Latin alphabet failed a check it satisfied perfectly.
+_NON_ALNUM_RE = re.compile(r"[\W_]+", re.UNICODE)
 
 DEFAULT_THRESHOLDS = {
     "entity.organization_declared": {

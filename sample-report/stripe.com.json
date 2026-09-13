@@ -1,0 +1,181 @@
+{
+  "site": "stripe.com",
+  "audited_at": "2026-09-12T18:43:12Z",
+  "summary": {
+    "total_findings": 2,
+    "critical": 0,
+    "high": 0,
+    "medium": 2,
+    "discoverability_score": 97,
+    "category_scores": {
+      "ai_comprehension": 93.5,
+      "ai_discoverability": 95.0,
+      "entity_trust": 100.0,
+      "human_orientation": 100.0
+    },
+    "score_confidence": 0.797,
+    "coverage": 1.0,
+    "category_coverage": {
+      "ai_comprehension": 1.0,
+      "ai_discoverability": 1.0,
+      "entity_trust": 1.0,
+      "human_orientation": 1.0
+    },
+    "verdict": "Your site is in good shape for AI assistants to find, read and cite.",
+    "headline_reliable": true,
+    "headline_caveat": null,
+    "category_verdicts": {
+      "ai_comprehension": "Your page states its facts clearly enough to be quoted.",
+      "ai_discoverability": "AI assistants can reach your page and read what is on it.",
+      "entity_trust": "Your page says clearly who you are and points to other places that confirm it.",
+      "human_orientation": "A visitor arriving from an AI answer can immediately tell what you do."
+    }
+  },
+  "diagnostics": {
+    "total_ms": 48141,
+    "crawl_ms": 40875,
+    "playwright_available": true,
+    "render_mode": "playwright",
+    "render_nav_state": "busy",
+    "render_wait_strategy": "load",
+    "pages_checked": [
+      "https://stripe.com/",
+      "https://stripe.com/in",
+      "https://stripe.com/in/pricing"
+    ],
+    "pages": [],
+    "language_detected": "en-in",
+    "language_supported": true,
+    "user_agent": "CitelyAuditBot/0.1",
+    "robots_checked": true,
+    "external_lookup": false,
+    "advisor": {},
+    "checks_evaluated": 24,
+    "checks_unknown": 0,
+    "errors": []
+  },
+  "partial": false,
+  "partial_reason": null,
+  "findings": [
+    {
+      "title": "Heading structure has gaps",
+      "severity": "medium",
+      "category": "ai_comprehension",
+      "check_id": "content.heading_hierarchy",
+      "confidence": "verified",
+      "plain_summary": "Your headings are mostly sensible but skip levels or repeat the top level.",
+      "signal": "Heading level sequence (h1 to h6) checked for skipped levels and multiple h1s",
+      "measurement": "57 headings, h1_count=2, skips=0",
+      "threshold": {
+        "max_level_skip": 1
+      },
+      "evidence": "Outline issues: 2 h1 elements (expected exactly 1)",
+      "selector": null,
+      "page_url": "https://stripe.com/",
+      "impact": "Headings define the document outline summarizers use to decide which sections survive condensation.",
+      "points_recoverable": 1.6,
+      "suggested_action": {
+        "summary": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4).",
+        "priority": "medium",
+        "target": "the heading elements in <body>, in document order",
+        "snippet": "<!-- One h1, then descend one level at a time. Skipping levels breaks the outline. -->\n<h1>Stripe | Financial Infrastructure to Grow Your Revenue</h1>\n  <h2>First major section</h2>\n    <h3>Detail within it</h3>\n  <h2>Second major section</h2>",
+        "validation": "List the headings in order and confirm there is exactly one `<h1>` and no level is skipped. Any outline tool or `document.querySelectorAll('h1,h2,h3,h4')` in the console will show the sequence."
+      },
+      "id": "F-001"
+    },
+    {
+      "title": "Some facts are locked inside images",
+      "severity": "medium",
+      "category": "ai_discoverability",
+      "check_id": "extraction.facts_not_image_only",
+      "confidence": "heuristic",
+      "plain_summary": "A few of your facts exist only as pictures.",
+      "signal": "Ratio of images carrying apparent factual content (numbers, claims) with no equivalent text or alt",
+      "measurement": "3/31 images (ratio 0.10, threshold 0.5)",
+      "threshold": {
+        "max_image_only_fact_ratio": 0.5,
+        "min_images_to_evaluate": 3,
+        "min_fact_image_px": 64
+      },
+      "evidence": "Some fact-bearing images lack a text equivalent: sessions-2026-on-demand-bg.png, sessions-2026-on-demand-bg-mobile.png, platform-graphic-background_2x.png (3/31 images (ratio 0.10, threshold 0.5))",
+      "selector": null,
+      "page_url": "https://stripe.com/",
+      "impact": "Text baked into images, SVG or canvas cannot be parsed into embeddings, so those facts are unavailable for citation even though a human can read them.",
+      "points_recoverable": 1.2,
+      "suggested_action": {
+        "summary": "Repeat any facts shown inside images as real text, or add alt text carrying the same numbers and claims.",
+        "priority": "medium",
+        "target": "each <img> carrying a figure, and the text around it",
+        "snippet": "<!-- A figure keeps the visual and makes the fact readable. The caption is real text, so it is\n     extractable; alt alone is not a substitute, because it is not part of the document's prose. -->\n<figure>\n  <img src=\"{{IMAGE_SRC}}\" alt=\"{{IMAGE_FACT_SUMMARY}}\">\n  <figcaption>{{IMAGE_FACT_SUMMARY}}</figcaption>\n</figure>",
+        "validation": "Run `curl -sS https://stripe.com/in | grep -F \"<figcaption\"` and confirm the numbers shown in the image appear as text. Copy the page into a plain-text editor: any fact that disappears is still invisible to an answer engine.",
+        "placeholders_remaining": [
+          "{{IMAGE_SRC}}",
+          "{{IMAGE_FACT_SUMMARY}}"
+        ]
+      },
+      "id": "F-002"
+    }
+  ],
+  "next_actions": [
+    {
+      "rank": 1,
+      "finding_id": "F-001",
+      "title": "Heading structure has gaps",
+      "severity": "medium",
+      "score_gain": 1.6,
+      "do": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4)."
+    },
+    {
+      "rank": 2,
+      "finding_id": "F-002",
+      "title": "Some facts are locked inside images",
+      "severity": "medium",
+      "score_gain": 1.2,
+      "do": "Repeat any facts shown inside images as real text, or add alt text carrying the same numbers and claims."
+    }
+  ],
+  "not_checked": [],
+  "recommendations": [
+    {
+      "id": "R-001",
+      "type": "proactive",
+      "detector": "R:facts_in_prose",
+      "category": "ai_comprehension",
+      "title": "Your specifics are stranded in paragraphs",
+      "summary": "Several specification-shaped facts — figures with units, labelled values — sit inside prose rather than in a list or table. Moving them into a definition list or table makes them survive summarising.",
+      "rationale": "This is not the same as having no lists at all, which is already checked. It is that the facts most worth citing are the ones still in prose. When a summariser condenses a long page it drops sentences before it drops table rows, so a specification in a paragraph is the first thing to disappear and the exact thing a user was asking for.",
+      "evidence": "10 specification-shaped facts sit in paragraphs against 5 in lists or tables, e.g. '99.999%'",
+      "measurement": 10,
+      "snippet": "<!-- Move the figures out of the sentence and into rows. Same facts, extractable shape. -->\n<table>\n  <tr><th>{{FACT_LABEL}}</th><td>{{FACT_VALUE}}</td></tr>\n  <tr><th>{{FACT_LABEL_2}}</th><td>{{FACT_VALUE_2}}</td></tr>\n</table>",
+      "validation": "Read your page and list every number a customer would ask about. Confirm each one now appears in a table row or definition list, not only inside a sentence.",
+      "page_url": "https://stripe.com/",
+      "placeholders_remaining": [
+        "{{FACT_LABEL}}",
+        "{{FACT_VALUE}}",
+        "{{FACT_LABEL_2}}",
+        "{{FACT_VALUE_2}}"
+      ]
+    },
+    {
+      "id": "R-002",
+      "type": "proactive",
+      "detector": "R:undated_claims",
+      "category": "ai_comprehension",
+      "title": "Your claims carry no date and no source",
+      "summary": "This page states figures but gives no publication date and cites nothing. Adding a visible date and naming where a figure comes from raises how much weight a retrieval system gives it.",
+      "rationale": "Extractability and credibility are different problems, and only the first is normally measured. A retrieval system that can read a claim perfectly well will still discount it when nothing says when it was true or who established it, because an undated figure cannot be checked for staleness. Sites optimise hard for the first and almost never for the second.",
+      "evidence": "64 numeric claims on the page, with no <time> element, no datePublished and no citation",
+      "measurement": 64,
+      "snippet": "<!-- A machine-readable date, plus attribution for the figure itself. -->\n<p>Last updated <time datetime=\"{{ISO_DATE}}\">{{HUMAN_DATE}}</time>.</p>\n\n<p>{{CLAIM_SENTENCE}} <cite><a href=\"{{SOURCE_URL}}\">{{SOURCE_NAME}}</a></cite></p>\n\n<!-- And declare the date to machines. This block is additive: it does not replace any\n     JSON-LD you already publish. -->\n<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"WebPage\",\n  \"url\": \"https://stripe.com/in\",\n  \"datePublished\": \"{{ISO_DATE}}\",\n  \"dateModified\": \"{{ISO_DATE}}\"\n}\n</script>",
+      "validation": "Confirm the page shows a date a reader can see, and that it is inside a `<time datetime=…>` element or a `dateModified` field. For each headline figure, confirm a reader can tell where it came from.",
+      "page_url": "https://stripe.com/",
+      "placeholders_remaining": [
+        "{{ISO_DATE}}",
+        "{{HUMAN_DATE}}",
+        "{{CLAIM_SENTENCE}}",
+        "{{SOURCE_URL}}",
+        "{{SOURCE_NAME}}"
+      ]
+    }
+  ]
+}

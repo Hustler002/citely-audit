@@ -1,0 +1,220 @@
+{
+  "site": "www.scaler.com",
+  "audited_at": "2026-09-13T07:10:15Z",
+  "summary": {
+    "total_findings": 3,
+    "critical": 0,
+    "high": 0,
+    "medium": 3,
+    "discoverability_score": 94,
+    "category_scores": {
+      "ai_comprehension": 88.0,
+      "ai_discoverability": 95.0,
+      "entity_trust": 95.0,
+      "human_orientation": 100.0
+    },
+    "score_confidence": 0.797,
+    "coverage": 1.0,
+    "category_coverage": {
+      "ai_comprehension": 1.0,
+      "ai_discoverability": 1.0,
+      "entity_trust": 1.0,
+      "human_orientation": 1.0
+    },
+    "verdict": "Your site is in good shape for AI assistants to find, read and cite.",
+    "headline_reliable": true,
+    "headline_caveat": null,
+    "category_verdicts": {
+      "ai_comprehension": "Your page states its facts clearly enough to be quoted.",
+      "ai_discoverability": "AI assistants can reach your page and read what is on it.",
+      "entity_trust": "Your page says clearly who you are and points to other places that confirm it.",
+      "human_orientation": "A visitor arriving from an AI answer can immediately tell what you do."
+    }
+  },
+  "diagnostics": {
+    "total_ms": 58203,
+    "crawl_ms": 50547,
+    "playwright_available": true,
+    "render_mode": "playwright",
+    "render_nav_state": "busy",
+    "render_wait_strategy": "load",
+    "pages_checked": [
+      "https://scaler.com/",
+      "https://www.scaler.com/",
+      "https://scaler.com/events",
+      "https://scaler.com/review/",
+      "https://www.scaler.com/school-of-business/guide"
+    ],
+    "pages": [
+      {
+        "url": "https://scaler.com/events",
+        "status": "blocked",
+        "http_status": 200,
+        "reason": "captcha"
+      }
+    ],
+    "language_detected": "en",
+    "language_supported": true,
+    "user_agent": "CitelyAuditBot/0.1",
+    "robots_checked": true,
+    "external_lookup": false,
+    "advisor": {
+      "suppressed": [
+        "R:facts_in_prose had something to report, withheld because content.scannable_blocks is already a finding"
+      ]
+    },
+    "checks_evaluated": 24,
+    "checks_unknown": 0,
+    "errors": []
+  },
+  "partial": true,
+  "partial_reason": "blocked",
+  "findings": [
+    {
+      "title": "Facts are buried in prose",
+      "severity": "medium",
+      "category": "ai_comprehension",
+      "check_id": "content.scannable_blocks",
+      "confidence": "verified",
+      "plain_summary": "Key details are locked in paragraphs instead of lists or tables.",
+      "signal": "Presence of lists, tables or definition lists carrying factual content",
+      "measurement": 0,
+      "threshold": {
+        "min_blocks": 1,
+        "min_items_per_block": 2,
+        "short_page_chars": 1000
+      },
+      "evidence": "No lists or tables across 19315 characters of prose; facts buried in paragraphs are extracted far less reliably than structured blocks",
+      "selector": null,
+      "page_url": "https://scaler.com/",
+      "impact": "Structured blocks are extracted far more reliably than the same facts buried in prose paragraphs.",
+      "points_recoverable": 3.0,
+      "suggested_action": {
+        "summary": "Move key facts out of prose into a list, table or definition list, which are extracted far more reliably than paragraphs.",
+        "priority": "medium",
+        "target": "the paragraphs holding your key facts",
+        "snippet": "<!-- Definition lists and tables are extracted far more reliably than the same facts in prose. -->\n<dl>\n  <dt>{{FACT_LABEL}}</dt><dd>{{FACT_VALUE}}</dd>\n  <dt>{{FACT_LABEL_2}}</dt><dd>{{FACT_VALUE_2}}</dd>\n</dl>",
+        "validation": "Confirm the page contains at least one `<ul>`, `<ol>`, `<dl>` or `<table>` carrying real facts rather than navigation links, with two or more items in it.",
+        "placeholders_remaining": [
+          "{{FACT_LABEL}}",
+          "{{FACT_VALUE}}",
+          "{{FACT_LABEL_2}}",
+          "{{FACT_VALUE_2}}"
+        ]
+      },
+      "id": "F-001"
+    },
+    {
+      "title": "Some facts are locked inside images",
+      "severity": "medium",
+      "category": "ai_discoverability",
+      "check_id": "extraction.facts_not_image_only",
+      "confidence": "heuristic",
+      "plain_summary": "A few of your facts exist only as pictures.",
+      "signal": "Ratio of images carrying apparent factual content (numbers, claims) with no equivalent text or alt",
+      "measurement": "19/77 images (ratio 0.25, threshold 0.5)",
+      "threshold": {
+        "max_image_only_fact_ratio": 0.5,
+        "min_images_to_evaluate": 3,
+        "min_fact_image_px": 64
+      },
+      "evidence": "Some fact-bearing images lack a text equivalent: rectangle-737.webp, rectangle-737.webp, rectangle-736.webp, rectangle-736.webp, rectangle-736.webp (19/77 images (ratio 0.25, threshold 0.5))",
+      "selector": null,
+      "page_url": "https://scaler.com/",
+      "impact": "Text baked into images, SVG or canvas cannot be parsed into embeddings, so those facts are unavailable for citation even though a human can read them.",
+      "points_recoverable": 1.2,
+      "suggested_action": {
+        "summary": "Repeat any facts shown inside images as real text, or add alt text carrying the same numbers and claims.",
+        "priority": "medium",
+        "target": "each <img> carrying a figure, and the text around it",
+        "snippet": "<!-- A figure keeps the visual and makes the fact readable. The caption is real text, so it is\n     extractable; alt alone is not a substitute, because it is not part of the document's prose. -->\n<figure>\n  <img src=\"{{IMAGE_SRC}}\" alt=\"{{IMAGE_FACT_SUMMARY}}\">\n  <figcaption>{{IMAGE_FACT_SUMMARY}}</figcaption>\n</figure>",
+        "validation": "Run `curl -sS https://www.scaler.com/ | grep -F \"<figcaption\"` and confirm the numbers shown in the image appear as text. Copy the page into a plain-text editor: any fact that disappears is still invisible to an answer engine.",
+        "placeholders_remaining": [
+          "{{IMAGE_SRC}}",
+          "{{IMAGE_FACT_SUMMARY}}"
+        ]
+      },
+      "id": "F-002"
+    },
+    {
+      "title": "Open Graph identity tags are incomplete",
+      "severity": "medium",
+      "category": "entity_trust",
+      "check_id": "entity.opengraph_identity",
+      "confidence": "verified",
+      "plain_summary": "You have some social/preview tags, but not all the core ones.",
+      "signal": "Presence of core og: properties",
+      "measurement": "2/3",
+      "threshold": {
+        "required_properties": [
+          "og:title",
+          "og:type",
+          "og:url"
+        ]
+      },
+      "evidence": "Present: og:title, og:url; missing: og:type",
+      "selector": null,
+      "page_url": "https://scaler.com/",
+      "impact": "Open Graph is a widely consumed secondary identity signal and a fallback when JSON-LD is absent or malformed.",
+      "points_recoverable": 1.2,
+      "suggested_action": {
+        "summary": "Add the core Open Graph tags (og:title, og:type, og:url) to the page head.",
+        "priority": "medium",
+        "target": "the Open Graph meta tags in <head>",
+        "snippet": "<!-- In <head>. Open Graph drives social previews; it is not a substitute for schema.org,\n     but a missing og:site_name loses the identity signal on every shared link. -->\n<meta property=\"og:site_name\" content=\"Scaler\">\n<meta property=\"og:title\" content=\"Become the Professional Built for the Next Decade in AI.\">\n<meta property=\"og:url\" content=\"https://www.scaler.com/\">\n<meta property=\"og:type\" content=\"website\">\n<meta property=\"og:image\" content=\"https://www.scaler.com/storyblok-assets/f/290352327034910/190x40/762eb27df8/scaler-logo.svg\">",
+        "validation": "Paste the URL into any link-preview debugger and confirm the site name and title shown are the ones you intend."
+      },
+      "id": "F-003"
+    }
+  ],
+  "next_actions": [
+    {
+      "rank": 1,
+      "finding_id": "F-001",
+      "title": "Facts are buried in prose",
+      "severity": "medium",
+      "score_gain": 3.0,
+      "do": "Move key facts out of prose into a list, table or definition list, which are extracted far more reliably than paragraphs."
+    },
+    {
+      "rank": 2,
+      "finding_id": "F-002",
+      "title": "Some facts are locked inside images",
+      "severity": "medium",
+      "score_gain": 1.2,
+      "do": "Repeat any facts shown inside images as real text, or add alt text carrying the same numbers and claims."
+    },
+    {
+      "rank": 3,
+      "finding_id": "F-003",
+      "title": "Open Graph identity tags are incomplete",
+      "severity": "medium",
+      "score_gain": 1.2,
+      "do": "Add the core Open Graph tags (og:title, og:type, og:url) to the page head."
+    }
+  ],
+  "not_checked": [],
+  "recommendations": [
+    {
+      "id": "R-001",
+      "type": "proactive",
+      "detector": "R:undated_claims",
+      "category": "ai_comprehension",
+      "title": "Your claims carry no date and no source",
+      "summary": "This page states figures but gives no publication date and cites nothing. Adding a visible date and naming where a figure comes from raises how much weight a retrieval system gives it.",
+      "rationale": "Extractability and credibility are different problems, and only the first is normally measured. A retrieval system that can read a claim perfectly well will still discount it when nothing says when it was true or who established it, because an undated figure cannot be checked for staleness. Sites optimise hard for the first and almost never for the second.",
+      "evidence": "23 numeric claims on the page, with no <time> element, no datePublished and no citation",
+      "measurement": 23,
+      "snippet": "<!-- A machine-readable date, plus attribution for the figure itself. -->\n<p>Last updated <time datetime=\"{{ISO_DATE}}\">{{HUMAN_DATE}}</time>.</p>\n\n<p>{{CLAIM_SENTENCE}} <cite><a href=\"{{SOURCE_URL}}\">{{SOURCE_NAME}}</a></cite></p>\n\n<!-- And declare the date to machines. This block is additive: it does not replace any\n     JSON-LD you already publish. -->\n<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"WebPage\",\n  \"url\": \"https://www.scaler.com/\",\n  \"datePublished\": \"{{ISO_DATE}}\",\n  \"dateModified\": \"{{ISO_DATE}}\"\n}\n</script>",
+      "validation": "Confirm the page shows a date a reader can see, and that it is inside a `<time datetime=…>` element or a `dateModified` field. For each headline figure, confirm a reader can tell where it came from.",
+      "page_url": "https://scaler.com/",
+      "placeholders_remaining": [
+        "{{ISO_DATE}}",
+        "{{HUMAN_DATE}}",
+        "{{CLAIM_SENTENCE}}",
+        "{{SOURCE_URL}}",
+        "{{SOURCE_NAME}}"
+      ]
+    }
+  ]
+}

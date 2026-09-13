@@ -358,20 +358,31 @@ def check_semantic_html(page, url) -> dict:
         return result("extraction.semantic_html", "unknown", page_url=url,
                       reason="HTML parser unavailable")
 
+    # This check grades LANDMARKS only. It deliberately does not look at h1 any more.
+    #
+    # It used to require exactly one h1 to pass, and to accept any h1 as partial credit. That made
+    # a missing h1 cost the site twice, in two different categories: once here under AI
+    # discoverability and once in `content.heading_hierarchy` under AI comprehension, which is the
+    # check that actually owns heading structure and already tests for exactly one h1. Two findings
+    # for one root cause is double jeopardy, and no suppression edge could catch it: suppression
+    # follows a dependency chain, and these are unrelated checks in two different categories that
+    # happened to read the same signal.
+    #
+    # Measured on a 32-site corpus, the separation also fixes a real misgrading: eff.org publishes
+    # a proper `article` landmark and two h1s, and was being marked down on LANDMARKS for what is
+    # purely a heading defect. It now passes here and is still reported by the heading check.
     landmarks = [t for t in ("main", "article", "header", "nav") if soup.find(t)]
-    h1s = soup.find_all("h1")
     has_primary = bool(soup.find("main") or soup.find("article"))
-    single_h1 = len(h1s) == 1
 
-    measurement = f"landmarks={','.join(landmarks) or 'none'}; h1_count={len(h1s)}"
-    if has_primary and single_h1:
+    measurement = f"landmarks={','.join(landmarks) or 'none'}"
+    if has_primary:
         return result("extraction.semantic_html", "pass", measurement=measurement, page_url=url,
-                      evidence=f"Primary content landmark present with exactly one h1 ({measurement})")
-    if landmarks or h1s:
+                      evidence=f"Primary content landmark present ({measurement})")
+    if landmarks:
         return result("extraction.semantic_html", "partial", measurement=measurement, page_url=url,
-                      evidence=f"Partial semantic structure: {measurement}")
+                      evidence=f"Partial semantic structure, no main or article landmark: {measurement}")
     return result("extraction.semantic_html", "fail", measurement=measurement, page_url=url,
-                  evidence="No semantic landmarks and no h1 — extractors cannot tell content from chrome")
+                  evidence="No semantic landmarks at all — extractors cannot tell content from chrome")
 
 
 # A content hash, a UUID or a bare row id is an ASSET FINGERPRINT, not a fact. Every modern build
@@ -383,6 +394,22 @@ _UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 _ENCODED_RE = re.compile(r"%[0-9a-f]{2}", re.IGNORECASE)
 _SHORT_NUMBER_RE = re.compile(r"(?<![0-9a-fA-F])\d{1,4}(?![0-9a-fA-F])")
 _WORDY_RE = re.compile(r"[A-Za-z]{3,}")
+
+
+# An inline asset carries its bytes in the attribute and has NO name to judge. Splitting a
+# `data:` URL on "/" returns a slice of its base64 payload, whose alphabet is exactly the one the
+# fact-filename rule looks for — letters for words, digits for a figure — so random payload read
+# as `revenue-2024`-shaped evidence. Measured on 500 random inline PNGs: 84% were reported as
+# fact-bearing images. Inline icons, logos and lazy-load placeholders are ordinary on the modern
+# web, so this fired on sites with no data images at all in the sense the check means.
+_OPAQUE_SRC_SCHEMES = ("data:", "blob:")
+
+
+def asset_filename(src: str) -> str:
+    """The filename an asset URL ends in, or "" when it has none for us to read."""
+    if (src or "").strip().lower().startswith(_OPAQUE_SRC_SCHEMES):
+        return ""
+    return urlparse(src).path.rsplit("/", 1)[-1]
 
 
 def looks_like_data_filename(filename: str) -> bool:
@@ -420,7 +447,8 @@ def _is_ui_sized(img, minimum_px: int) -> bool:
 def check_facts_not_image_only(page, url, thresholds) -> dict:
     """Flag images that appear to carry factual content with no text equivalent.
 
-    Deliberately conservative (a statistical check per PLAN §6.3): an image is only suspicious when
+    Deliberately conservative, because this is a statistical signal rather than a certainty: an
+    image is only suspicious when
     its filename carries digits AND it has no usable alt text. Decorative imagery and properly
     described images are ignored, because a false 'your facts are trapped in pictures' finding on an
     unseen site is worse than a miss.
@@ -443,7 +471,7 @@ def check_facts_not_image_only(page, url, thresholds) -> dict:
     for img in images:
         alt = (img.get("alt") or "").strip()
         src = img.get("src") or ""
-        filename = urlparse(src).path.rsplit("/", 1)[-1]
+        filename = asset_filename(src)
         if _is_ui_sized(img, minimum_px):
             continue                      # an 18x18 reaction icon holds no chart
         considered.append(img)

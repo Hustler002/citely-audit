@@ -1,0 +1,601 @@
+{
+  "site": "www.berkshirehathaway.com",
+  "audited_at": "2026-09-13T05:53:08Z",
+  "summary": {
+    "total_findings": 11,
+    "critical": 3,
+    "high": 1,
+    "medium": 7,
+    "discoverability_score": 53,
+    "category_scores": {
+      "ai_comprehension": 56.1,
+      "ai_discoverability": 91.1,
+      "entity_trust": 6.0,
+      "human_orientation": 58.5
+    },
+    "score_confidence": 0.97,
+    "coverage": 0.823,
+    "category_coverage": {
+      "ai_comprehension": 0.57,
+      "ai_discoverability": 0.9,
+      "entity_trust": 1.0,
+      "human_orientation": 0.82
+    },
+    "verdict": "AI assistants can work with your site, but several things are holding back how often it gets cited.",
+    "headline_reliable": true,
+    "headline_caveat": null,
+    "category_verdicts": {
+      "ai_comprehension": "Your page can be read, but its key facts are hard to lift out and quote.",
+      "ai_discoverability": "AI assistants can reach your page and read what is on it.",
+      "entity_trust": "Nothing on your page tells a machine which business this is.",
+      "human_orientation": "A visitor arriving from an AI answer has to work to tell what you do."
+    }
+  },
+  "diagnostics": {
+    "total_ms": 33156,
+    "crawl_ms": 31875,
+    "playwright_available": true,
+    "render_mode": "playwright",
+    "render_nav_state": "ok",
+    "render_wait_strategy": "load",
+    "pages_checked": [
+      "https://www.berkshirehathaway.com/",
+      "https://www.berkshirehathaway.com/message.html",
+      "https://www.berkshirehathaway.com/reports.html",
+      "https://www.berkshirehathaway.com/sharehold.html",
+      "https://www.berkshirehathaway.com/disclaimer.html"
+    ],
+    "pages": [],
+    "language_detected": null,
+    "language_supported": false,
+    "user_agent": "CitelyAuditBot/0.1",
+    "robots_checked": true,
+    "external_lookup": false,
+    "advisor": {
+      "language_gated": [
+        "R:facts_in_prose",
+        "R:undated_claims"
+      ]
+    },
+    "checks_evaluated": 21,
+    "checks_unknown": 3,
+    "errors": []
+  },
+  "partial": false,
+  "partial_reason": null,
+  "findings": [
+    {
+      "title": "No organization or person entity declared",
+      "severity": "critical",
+      "category": "entity_trust",
+      "check_id": "entity.organization_declared",
+      "confidence": "verified",
+      "plain_summary": "Your page never states who it is about in a way machines understand.",
+      "signal": "A schema.org entity of an accepted identity type in the structured data graph",
+      "measurement": 0,
+      "threshold": {
+        "accepted_types": [
+          "Organization",
+          "Person",
+          "LocalBusiness",
+          "Corporation",
+          "NGO",
+          "NewsMediaOrganization",
+          "EducationalOrganization",
+          "GovernmentOrganization",
+          "SportsOrganization",
+          "Airline",
+          "Consortium",
+          "Cooperative",
+          "MedicalOrganization",
+          "PerformingGroup",
+          "Project",
+          "Brand",
+          "Store",
+          "Restaurant",
+          "Dentist",
+          "Physician",
+          "LegalService",
+          "HomeAndConstructionBusiness",
+          "FoodEstablishment",
+          "HealthAndBeautyBusiness",
+          "AutomotiveBusiness",
+          "FinancialService",
+          "ProfessionalService",
+          "EntertainmentBusiness",
+          "LodgingBusiness",
+          "TravelAgency"
+        ],
+        "identity_properties": [
+          "address",
+          "telephone",
+          "email",
+          "sameAs",
+          "logo",
+          "founder",
+          "vatID",
+          "taxID",
+          "openingHours",
+          "openingHoursSpecification",
+          "geo",
+          "contactPoint",
+          "hasMap",
+          "aggregateRating",
+          "duns",
+          "leiCode",
+          "naics",
+          "isicV4"
+        ],
+        "min_identity_properties": 2
+      },
+      "evidence": "No entity of an accepted identity type (Organization, Person, LocalBusiness, Corporation, NGO, NewsMediaOrganization, EducationalOrganization, GovernmentOrganization, SportsOrganization, Airline, Consortium, Cooperative, MedicalOrganization, PerformingGroup, Project, Brand, Store, Restaurant, Dentis…",
+      "selector": null,
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "This is the anchor that tells an AI who the page is about. Without it the brand has no declared identity to attach facts to.",
+      "points_recoverable": 6.0,
+      "suggested_action": {
+        "summary": "Add a JSON-LD Organization (or Person) entry that names who this site is about.",
+        "priority": "critical",
+        "target": "the Organization node in your JSON-LD",
+        "snippet": "<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"BERKSHIRE HATHAWAY INC.\",\n  \"url\": \"https://www.berkshirehathaway.com/\",\n  \"logo\": \"{{LOGO_URL}}\",\n  \"description\": \"{{META_DESCRIPTION}}\"\n}\n</script>\n\n<!-- Use a more specific @type if one fits — Dentist, Bakery, LocalBusiness, SoftwareApplication.\n     A specific type carries more meaning than the generic one, and any schema.org subtype counts. -->",
+        "validation": "Run the Rich Results Test and confirm the detected entity's name matches the brand name a visitor sees in your header. A mismatch is worse than no markup: it tells the machine you are a different organisation.",
+        "placeholders_remaining": [
+          "{{LOGO_URL}}",
+          "{{META_DESCRIPTION}}"
+        ]
+      },
+      "id": "F-001"
+    },
+    {
+      "title": "No structured data on the page",
+      "severity": "critical",
+      "category": "entity_trust",
+      "check_id": "entity.structured_data_present",
+      "confidence": "verified",
+      "plain_summary": "Your page has no machine-readable description of what it is about.",
+      "signal": "Presence of parseable JSON-LD, microdata or RDFa",
+      "measurement": 0,
+      "threshold": null,
+      "evidence": "No JSON-LD or microdata on any audited page, so there is no machine-readable description of what this page is about",
+      "selector": "head",
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "Without structured data an AI must infer identity from prose, which is where mistaken-identity and hallucination begin.",
+      "points_recoverable": 5.5,
+      "suggested_action": {
+        "summary": "Add a JSON-LD block describing this page. Open Graph tags are not a substitute: they drive social previews and carry no schema.org type, so a machine still cannot tell what kind of thing this page is about.",
+        "priority": "critical",
+        "target": "a JSON-LD script block in <head>",
+        "snippet": "<!-- In <head> or at the end of <body>. JSON-LD is the format answer engines read most reliably. -->\n<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"BERKSHIRE HATHAWAY INC.\",\n  \"url\": \"https://www.berkshirehathaway.com/\",\n  \"logo\": \"{{LOGO_URL}}\"\n}\n</script>",
+        "validation": "Paste the URL into Google's Rich Results Test or schema.org's validator and confirm an Organization is detected with no errors.",
+        "placeholders_remaining": [
+          "{{LOGO_URL}}"
+        ]
+      },
+      "id": "F-002"
+    },
+    {
+      "title": "No heading in the first viewport",
+      "severity": "critical",
+      "category": "human_orientation",
+      "check_id": "orientation.heading_first_viewport",
+      "confidence": "verified",
+      "plain_summary": "Visitors do not see a clear headline when they land.",
+      "signal": "Presence of an h1 or hero heading within the first viewport height",
+      "measurement": 0,
+      "threshold": {
+        "first_viewport_px": 800,
+        "dom_proxy_text_chars": 1200,
+        "chrome_text_weight": 0.1,
+        "chrome_text_cap": 400
+      },
+      "evidence": "No heading renders within the first 800px, so a visitor cannot confirm they landed in the right place",
+      "selector": null,
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "A visitor arriving from an AI answer has seconds to confirm they landed in the right place. No heading means no confirmation.",
+      "points_recoverable": 6.0,
+      "suggested_action": {
+        "summary": "Put a clear headline at the top of the page so arriving visitors immediately see what it is.",
+        "priority": "critical",
+        "target": "the first elements inside <main>",
+        "snippet": "<!-- The first thing in <main> should be the heading, not a carousel or a banner. -->\n<main>\n  <h1>{{HEADLINE}}</h1>\n  <p>{{SUPPORTING_SENTENCE}}</p>\n</main>",
+        "validation": "Load the page at 1280x800 and confirm a real heading is visible without scrolling. A visitor arriving from an AI citation decides in that first screen whether they reached the right place.",
+        "placeholders_remaining": [
+          "{{HEADLINE}}",
+          "{{SUPPORTING_SENTENCE}}"
+        ]
+      },
+      "id": "F-003"
+    },
+    {
+      "title": "Your identity is not linked to anything else",
+      "severity": "high",
+      "category": "entity_trust",
+      "check_id": "entity.sameas_present",
+      "confidence": "verified",
+      "plain_summary": "Nothing on the page connects you to your profiles or listings elsewhere on the web.",
+      "signal": "sameAs property on the declared entity",
+      "measurement": 0,
+      "threshold": {
+        "min_links": 1
+      },
+      "evidence": "No sameAs, rel=\"me\" or profile links on any audited page, so this identity is not connected to any other record of it on the web",
+      "selector": "script[type=\"application/ld+json\"]",
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "sameAs links let an AI corroborate your identity across the web instead of guessing between similarly named businesses.",
+      "points_recoverable": 5.0,
+      "suggested_action": {
+        "summary": "Add sameAs links from your Organization entry to the profiles and listings you already link to, such as your Google Business, Facebook or LinkedIn page. If you have no structured data yet, rel=\"me\" on those links is a valid alternative.",
+        "priority": "high",
+        "target": "the sameAs array on your Organization node",
+        "snippet": "<!-- sameAs states \"these profiles are me\". Add it to the Organization you already declare. -->\n<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"BERKSHIRE HATHAWAY INC.\",\n  \"url\": \"https://www.berkshirehathaway.com/\",\n  \"sameAs\": [\n{{SAMEAS_LINKS}}\n  ]\n}\n</script>\n\n<!-- With no structured data yet, rel=\"me\" on the links you already have is a valid alternative: -->\n<a rel=\"me\" href=\"{{PROFILE_URL}}\">BERKSHIRE HATHAWAY INC. on {{PLATFORM}}</a>",
+        "validation": "Confirm every URL in `sameAs` loads and is a profile you control. A dead or wrong link weakens corroboration instead of strengthening it.",
+        "placeholders_remaining": [
+          "{{SAMEAS_LINKS}}",
+          "{{PROFILE_URL}}",
+          "{{PLATFORM}}"
+        ]
+      },
+      "id": "F-004"
+    },
+    {
+      "title": "Heading structure is inconsistent",
+      "severity": "medium",
+      "category": "ai_comprehension",
+      "check_id": "content.heading_hierarchy",
+      "confidence": "verified",
+      "plain_summary": "Your headings are not in a sensible order.",
+      "signal": "Heading level sequence (h1 to h6) checked for skipped levels and multiple h1s",
+      "measurement": 0,
+      "threshold": {
+        "max_level_skip": 1
+      },
+      "evidence": "No headings at all, so there is no document outline for a summarizer to follow",
+      "selector": null,
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "Headings define the document outline summarizers use to decide which sections survive condensation.",
+      "points_recoverable": 3.2,
+      "suggested_action": {
+        "summary": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4).",
+        "priority": "medium",
+        "target": "the heading elements in <body>, in document order",
+        "snippet": "<!-- One h1, then descend one level at a time. Skipping levels breaks the outline. -->\n<h1>BERKSHIRE HATHAWAY INC.</h1>\n  <h2>First major section</h2>\n    <h3>Detail within it</h3>\n  <h2>Second major section</h2>",
+        "validation": "List the headings in order and confirm there is exactly one `<h1>` and no level is skipped. Any outline tool or `document.querySelectorAll('h1,h2,h3,h4')` in the console will show the sequence."
+      },
+      "id": "F-005"
+    },
+    {
+      "title": "Meta description is missing or the wrong length",
+      "severity": "medium",
+      "category": "ai_comprehension",
+      "check_id": "content.meta_description",
+      "confidence": "verified",
+      "plain_summary": "There is no short summary for answer engines to reuse.",
+      "signal": "Presence and length of meta name=description",
+      "measurement": 0,
+      "threshold": {
+        "min_chars": 50,
+        "max_chars": 160
+      },
+      "evidence": "No meta description, so answer engines have no ready-made summary to reuse",
+      "selector": "meta[name=\"description\"]",
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "Provides a ready-made summary that answer engines frequently reuse verbatim.",
+      "points_recoverable": 3.0,
+      "suggested_action": {
+        "summary": "Add a meta description of roughly 50-160 characters summarising the page in one sentence an answer engine could reuse verbatim.",
+        "priority": "medium",
+        "target": "the description meta tag in <head>",
+        "snippet": "<!-- In <head>. One self-contained sentence stating what this page offers. -->\n<meta name=\"description\" content=\"{{ONE_SENTENCE_DESCRIPTION}}\">",
+        "validation": "View source and confirm a single `<meta name=\"description\">` of 50 to 160 characters. Paste the URL into a link-preview tool and confirm the description shown is yours, not text the platform guessed.",
+        "placeholders_remaining": [
+          "{{ONE_SENTENCE_DESCRIPTION}}"
+        ]
+      },
+      "id": "F-006"
+    },
+    {
+      "title": "Semantic HTML landmarks are missing",
+      "severity": "medium",
+      "category": "ai_discoverability",
+      "check_id": "extraction.semantic_html",
+      "confidence": "verified",
+      "plain_summary": "Nothing marks out which part of the page is the main content.",
+      "signal": "Presence of main/article/header/nav landmarks delimiting content from chrome",
+      "measurement": "landmarks=none",
+      "threshold": null,
+      "evidence": "No semantic landmarks at all — extractors cannot tell content from chrome",
+      "selector": null,
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "Semantic structure tells extractors which text is primary content versus navigation and boilerplate.",
+      "points_recoverable": 2.0,
+      "suggested_action": {
+        "summary": "Wrap the primary content in a <main> or <article> element, so extractors can tell content from navigation and boilerplate.",
+        "priority": "medium",
+        "target": "the page's top-level layout wrappers",
+        "snippet": "<!-- Replace generic wrappers with landmark elements. Same layout, machine-readable structure. -->\n<header> … site identity and navigation … </header>\n<main>\n  <article>\n    <h1>BERKSHIRE HATHAWAY INC.</h1>\n    <section> … your primary content … </section>\n  </article>\n</main>\n<footer> … contact and legal … </footer>",
+        "validation": "View source and confirm exactly one `<main>` exists and your primary content sits inside it. Extraction tools use `<main>` to separate content from chrome."
+      },
+      "id": "F-007"
+    },
+    {
+      "title": "Your name is stated, but nothing confirms it",
+      "severity": "medium",
+      "category": "entity_trust",
+      "check_id": "entity.name_consistency",
+      "confidence": "verified",
+      "plain_summary": "Your brand name appears in only one place, so nothing corroborates it.",
+      "signal": "Entity name compared across JSON-LD blocks, Open Graph site name and the document title",
+      "measurement": 1,
+      "threshold": {
+        "min_sources": 2
+      },
+      "evidence": "The page states a name only in its title (\"BERKSHIRE HATHAWAY INC.\"), never in a machine-readable identity field, so there is nothing for an AI to read as the brand's name",
+      "selector": "meta[property=\"og:site_name\"]",
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "Contradictory names across blocks actively teach an AI the wrong association and are worse than no data at all.",
+      "points_recoverable": 1.5,
+      "suggested_action": {
+        "summary": "State one exact spelling of your name in your JSON-LD entry, in og:site_name and in the page title, so the three agree.",
+        "priority": "medium",
+        "target": "the <title>, the og:site_name tag and the JSON-LD name — all three",
+        "snippet": "<!-- The same brand string in all three places. A machine treats a difference as a different\n     organisation, which is exactly the mistaken-identity failure this category measures. -->\n<title>BERKSHIRE HATHAWAY INC. — …</title>\n<meta property=\"og:site_name\" content=\"BERKSHIRE HATHAWAY INC.\">\n<!-- and in JSON-LD: -->  \"name\": \"BERKSHIRE HATHAWAY INC.\"",
+        "validation": "Compare the `name` in your JSON-LD, the `og:site_name`, and the brand shown in your header. A tagline appended after a separator is fine; a genuinely different name is not."
+      },
+      "id": "F-008"
+    },
+    {
+      "title": "Open Graph identity tags missing",
+      "severity": "medium",
+      "category": "entity_trust",
+      "check_id": "entity.opengraph_identity",
+      "confidence": "verified",
+      "plain_summary": "Your page lacks the social/preview tags that describe it.",
+      "signal": "Presence of core og: properties",
+      "measurement": "0/3",
+      "threshold": {
+        "required_properties": [
+          "og:title",
+          "og:type",
+          "og:url"
+        ]
+      },
+      "evidence": "No Open Graph identity tags found",
+      "selector": null,
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "Open Graph is a widely consumed secondary identity signal and a fallback when JSON-LD is absent or malformed.",
+      "points_recoverable": 2.5,
+      "suggested_action": {
+        "summary": "Add the core Open Graph tags (og:title, og:type, og:url) to the page head.",
+        "priority": "medium",
+        "target": "the Open Graph meta tags in <head>",
+        "snippet": "<!-- In <head>. Open Graph drives social previews; it is not a substitute for schema.org,\n     but a missing og:site_name loses the identity signal on every shared link. -->\n<meta property=\"og:site_name\" content=\"BERKSHIRE HATHAWAY INC.\">\n<meta property=\"og:title\" content=\"BERKSHIRE HATHAWAY INC.\">\n<meta property=\"og:url\" content=\"https://www.berkshirehathaway.com/\">\n<meta property=\"og:type\" content=\"website\">\n<meta property=\"og:image\" content=\"{{LOGO_URL}}\">",
+        "validation": "Paste the URL into any link-preview debugger and confirm the site name and title shown are the ones you intend.",
+        "placeholders_remaining": [
+          "{{LOGO_URL}}"
+        ]
+      },
+      "id": "F-009"
+    },
+    {
+      "title": "Your identity is not anchored to any outside record",
+      "severity": "medium",
+      "category": "entity_trust",
+      "check_id": "entity.sameas_authority",
+      "confidence": "verified",
+      "plain_summary": "Nothing you link to is a record maintained by someone other than you.",
+      "signal": "sameAs targets matched against known authority domains",
+      "measurement": 0,
+      "threshold": {
+        "authority_domains": [
+          "wikidata.org",
+          "wikipedia.org",
+          "dbpedia.org",
+          "viaf.org",
+          "isni.org",
+          "ror.org",
+          "orcid.org",
+          "crunchbase.com",
+          "opencorporates.com",
+          "companieshouse.gov.uk",
+          "sec.gov",
+          "bloomberg.com",
+          "linkedin.com",
+          "g.page",
+          "business.site",
+          "maps.google.com",
+          "yelp.com",
+          "tripadvisor.com",
+          "trustpilot.com",
+          "bbb.org",
+          "glassdoor.com",
+          "indeed.com",
+          "yellowpages.com",
+          "thomasnet.com",
+          "angi.com",
+          "checkatrade.com",
+          "trustedtraders.which.co.uk",
+          "healthgrades.com",
+          "zocdoc.com",
+          "avvo.com",
+          "justia.com",
+          "github.com",
+          "gitlab.com"
+        ],
+        "social_profile_domains": [
+          "facebook.com",
+          "fb.com",
+          "instagram.com",
+          "twitter.com",
+          "x.com",
+          "youtube.com",
+          "tiktok.com",
+          "pinterest.com",
+          "threads.net",
+          "threads.com",
+          "snapchat.com",
+          "reddit.com",
+          "vimeo.com",
+          "flickr.com",
+          "tumblr.com",
+          "medium.com",
+          "substack.com",
+          "bsky.app",
+          "mastodon.social",
+          "weibo.com",
+          "vk.com",
+          "xing.com",
+          "line.me",
+          "t.me",
+          "telegram.me",
+          "whatsapp.com",
+          "wa.me"
+        ],
+        "share_path_markers": [
+          "/sharer",
+          "/share",
+          "/intent/",
+          "/shareartic",
+          "/submit",
+          "/dialog/",
+          "/send",
+          "/post?",
+          "/tweet",
+          "/pin/create"
+        ]
+      },
+      "evidence": "No identity links of any kind, so there is no chain to anchor",
+      "selector": null,
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "Corroboration needs a record the brand does not control. Links only to your own accounts leave an AI unable to tell you apart from a similarly named business.",
+      "points_recoverable": 3.0,
+      "suggested_action": {
+        "summary": "Link to at least one record somebody else maintains. A Google Business Profile, a Yelp or industry-directory listing, or a companies-registry entry all work; Wikidata or Wikipedia are the strongest but are not required.",
+        "priority": "medium",
+        "target": "the sameAs array on your Organization node",
+        "snippet": "<!-- Add at least one record somebody else maintains. Any ONE of these anchors your identity;\n     a local business does not need Wikidata, and a directory listing works just as well. -->\n\"sameAs\": [\n{{SAMEAS_LINKS_LEADING}}\n    \"{{AUTHORITY_PROFILE_URL}}\"\n]",
+        "validation": "Confirm at least one `sameAs` target is a record you do not publish yourself — a Google Business Profile, an industry directory, a companies registry or a review platform. Links only to your own accounts cannot settle which business you are.",
+        "placeholders_remaining": [
+          "{{SAMEAS_LINKS_LEADING}}",
+          "{{AUTHORITY_PROFILE_URL}}"
+        ]
+      },
+      "id": "F-010"
+    },
+    {
+      "title": "Mobile viewport is not declared",
+      "severity": "medium",
+      "category": "human_orientation",
+      "check_id": "orientation.viewport_meta",
+      "confidence": "verified",
+      "plain_summary": "Your page is not set up to display properly on phones.",
+      "signal": "Presence of meta name=viewport",
+      "measurement": "absent",
+      "threshold": null,
+      "evidence": "No meta viewport, so the page renders unusably small on mobile — where most AI-referred traffic arrives",
+      "selector": "meta[name=\"viewport\"]",
+      "page_url": "https://www.berkshirehathaway.com/",
+      "impact": "Most AI-referred traffic is mobile. Without a viewport declaration the page renders unusably small.",
+      "points_recoverable": 2.5,
+      "suggested_action": {
+        "summary": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives.",
+        "priority": "medium",
+        "target": "the viewport meta tag in <head>",
+        "snippet": "<!-- In <head>. Without it, mobile browsers render at desktop width and zoom out. -->\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+        "validation": "Open the page on a phone, or in device emulation, and confirm the text is readable without pinch-zooming."
+      },
+      "id": "F-011"
+    }
+  ],
+  "next_actions": [
+    {
+      "rank": 1,
+      "finding_id": "F-001",
+      "title": "No organization or person entity declared",
+      "severity": "critical",
+      "score_gain": 6.0,
+      "do": "Add a JSON-LD Organization (or Person) entry that names who this site is about."
+    },
+    {
+      "rank": 2,
+      "finding_id": "F-003",
+      "title": "No heading in the first viewport",
+      "severity": "critical",
+      "score_gain": 6.0,
+      "do": "Put a clear headline at the top of the page so arriving visitors immediately see what it is."
+    },
+    {
+      "rank": 3,
+      "finding_id": "F-002",
+      "title": "No structured data on the page",
+      "severity": "critical",
+      "score_gain": 5.5,
+      "do": "Add a JSON-LD block describing this page. Open Graph tags are not a substitute: they drive social previews and carry no schema.org type, so a machine still cannot tell what kind of thing this page is about."
+    },
+    {
+      "rank": 4,
+      "finding_id": "F-004",
+      "title": "Your identity is not linked to anything else",
+      "severity": "high",
+      "score_gain": 5.0,
+      "do": "Add sameAs links from your Organization entry to the profiles and listings you already link to, such as your Google Business, Facebook or LinkedIn page. If you have no structured data yet, rel=\"me\" on those links is a valid alternative."
+    },
+    {
+      "rank": 5,
+      "finding_id": "F-005",
+      "title": "Heading structure is inconsistent",
+      "severity": "medium",
+      "score_gain": 3.2,
+      "do": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4)."
+    },
+    {
+      "rank": 6,
+      "finding_id": "F-006",
+      "title": "Meta description is missing or the wrong length",
+      "severity": "medium",
+      "score_gain": 3.0,
+      "do": "Add a meta description of roughly 50-160 characters summarising the page in one sentence an answer engine could reuse verbatim."
+    },
+    {
+      "rank": 7,
+      "finding_id": "F-010",
+      "title": "Your identity is not anchored to any outside record",
+      "severity": "medium",
+      "score_gain": 3.0,
+      "do": "Link to at least one record somebody else maintains. A Google Business Profile, a Yelp or industry-directory listing, or a companies-registry entry all work; Wikidata or Wikipedia are the strongest but are not required."
+    },
+    {
+      "rank": 8,
+      "finding_id": "F-009",
+      "title": "Open Graph identity tags missing",
+      "severity": "medium",
+      "score_gain": 2.5,
+      "do": "Add the core Open Graph tags (og:title, og:type, og:url) to the page head."
+    },
+    {
+      "rank": 9,
+      "finding_id": "F-011",
+      "title": "Mobile viewport is not declared",
+      "severity": "medium",
+      "score_gain": 2.5,
+      "do": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives."
+    },
+    {
+      "rank": 10,
+      "finding_id": "F-007",
+      "title": "Semantic HTML landmarks are missing",
+      "severity": "medium",
+      "score_gain": 2.0,
+      "do": "Wrap the primary content in a <main> or <article> element, so extractors can tell content from navigation and boilerplate."
+    },
+    {
+      "rank": 11,
+      "finding_id": "F-008",
+      "title": "Your name is stated, but nothing confirms it",
+      "severity": "medium",
+      "score_gain": 1.5,
+      "do": "State one exact spelling of your name in your JSON-LD entry, in og:site_name and in the page title, so the three agree."
+    }
+  ],
+  "not_checked": [],
+  "recommendations": []
+}

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "_note": "Scoring model + operational configuration. Per-check thresholds live in checks.json, NOT here — one source of truth each. This file replaces the v1 penalty model (100 - sum(penalty)), which was unbounded, double-counted correlated findings, and conflated missing signal with negative signal.",
+  "_note": "Scoring model + operational configuration. Per-check thresholds live in checks.json, NOT here — one source of truth each. The model is a capability score rather than a penalty score (100 - sum(penalty)): a penalty model is unbounded, double-counts correlated findings, and conflates a missing signal with a negative one.",
   "category_weights": {
     "_note": "Weights for the overall score (a weighted mean of category scores). Equal by design: gating is handled structurally by dependency suppression, not by weight inflation, so no category needs boosting to encode importance. With 3 AI-side categories and 1 human-side, equal weights land at 75% AI / 25% human — matching the brief's 4:1 mechanic split — and require no arbitrary justification.",
     "ai_discoverability": 25,
@@ -35,12 +35,13 @@
     "medium"
   ],
   "budgets": {
-    "_note": "Global deadline leaves margin under the mandated 5-minute ceiling. Per-request and render timeouts deliberately live in `fetch` and `render` respectively — they were duplicated here and the copies were never read, which is exactly the drift hazard PLAN.md §1 (mistake #22) warns about.",
+    "_note": "Global deadline leaves margin under the mandated 5-minute ceiling. Per-request and render timeouts deliberately live in `fetch` and `render` respectively — they were duplicated here and the copies were never read, which is exactly how two copies of one value drift apart.",
     "global_deadline_s": 270
   },
   "fetch": {
-    "user_agent": "CitelyAuditBot/0.1 (+https://example.com/citely-bot)",
-    "_user_agent_todo": "Replace the contact URL before any run against a third-party site.",
+    "user_agent": "CitelyAuditBot/0.1",
+    "contact_url": "",
+    "_contact_url_note": "Optional. When set, it is appended as ' (+URL)' to form the User-Agent sent on every request, which is the convention for identifying a crawler to a site operator. It is EMPTY by default on purpose. It previously held 'https://example.com/citely-bot', a domain IANA reserves for documentation, so an operator who investigated the bot landed on a placeholder that read like a real contact. Shipping an invented URL would also breach this project's own rule against presenting an unobserved value as a fact. Set it to a page you actually control.",
     "max_body_bytes": 5242880,
     "max_decompressed_bytes": 20971520,
     "max_redirects": 5,
@@ -60,10 +61,10 @@
       "text/html",
       "application/xhtml+xml"
     ],
-    "_html_content_types_note": "PLAN.md §10 requires text/html only for page content. Without enforcement a PDF, JSON API or image would be fetched and parsed as HTML, producing garbage findings on unseen sites."
+    "_html_content_types_note": "Page content is restricted to text/html. Without enforcement a PDF, JSON API or image would be fetched and parsed as HTML, producing garbage findings on unseen sites."
   },
   "robots": {
-    "_note": "Two DISTINCT robots concerns, deliberately separated. (1) `audit_user_agent_gate`: may CitelyAuditBot fetch at all? Operational only — if disallowed the orchestrator stops, emits one critical finding, and sets partial_reason 'blocked'. Never scored, because nobody blocklists an unknown auditor UA. (2) `ai_crawlers`: may the assistants' crawlers fetch? THIS is the scored signal (check access.ai_crawlers_allowed) — a site can allow us and still be invisible to ChatGPT.",
+    "_note": "Two DISTINCT robots concerns, deliberately separated. (1) `audit_user_agent_gate`: may CitelyAuditBot fetch at all? Operational only — if disallowed the orchestrator fetches nothing, records the block in diagnostics.errors, resolves every check to `unknown` (no finding is emitted), and sets partial_reason 'blocked'. Never scored, because nobody blocklists an unknown auditor UA. (2) `ai_crawlers`: may the assistants' crawlers fetch? THIS is the scored signal (check access.ai_crawlers_allowed) — a site can allow us and still be invisible to ChatGPT.",
     "ai_crawlers": [
       {
         "token": "GPTBot",
@@ -115,7 +116,7 @@
   },
   "page_selection": {
     "_note": "max_pages is a budget-derived MAXIMUM, not a guarantee. Pages skipped for budget yield `unknown` checks (excluded from the denominator), so a short scan lowers confidence rather than the score.",
-    "_language_neutrality": "Selection is STRUCTURAL, never lexical. PLAN.md §8 forbids assuming URL conventions, so we do NOT match /about, /faq etc. — that is English-only and silently degrades to homepage-only on any non-English site. Pages are ranked by nav membership and URL depth, which behave identically in every language.",
+    "_language_neutrality": "Selection is STRUCTURAL, never lexical: we do NOT match /about, /faq etc. — that is English-only and silently degrades to homepage-only on any non-English site. Pages are ranked by nav membership and URL depth, which behave identically in every language.",
     "max_pages": 5,
     "prefer_nav_links": true,
     "max_path_depth": 2,
@@ -152,15 +153,6 @@
     "supported": [
       "en"
     ]
-  },
-  "external_lookup": {
-    "_note": "Wikidata corroboration runs in the orchestrator's fetch stage (left of the artifact boundary), never inside an analyzer. Off by default.",
-    "enabled": false,
-    "allowed_domains": [
-      "wikidata.org",
-      "www.wikidata.org"
-    ],
-    "timeout_s": 5
   },
   "render": {
     "_note": "Tier A = real Chromium render. Tier B = browserless SPA heuristic when no browser is available. Disclosed via diagnostics.render_mode. Chromium is provisioned as a SETUP step, never inside the timed run.",

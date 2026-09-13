@@ -47,11 +47,16 @@ def detect_language(html: str) -> tuple:
     Deliberately conservative: we report what the page DECLARES rather than guessing from content.
     A wrong guess would wrongly enable language-dependent checks and produce exactly the false
     positives the i18n gate exists to prevent. Undetected simply means those checks stay `unknown`.
+
+    The value may be quoted or not. HTML allows `<html lang=en>`, which minified pages emit, and
+    requiring quotes silently discarded a real declaration, so the page's language-dependent checks
+    resolved to `unknown` as if it had declared nothing.
     """
     import re
     if not html:
         return None, None
-    m = re.search(r"<html[^>]*\blang\s*=\s*[\"']([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)[\"']", html[:4000], re.I)
+    m = re.search(r"<html[^>]*\blang\s*=\s*[\"']?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)(?=[\"'\s/>]|$)",
+                  html[:4000], re.I)
     if m:
         return m.group(1).lower(), "html_lang"
     return None, None
@@ -125,6 +130,7 @@ def _page_entry(candidate, fetch_result, render_result, config) -> dict:
     if render_result is not None:
         entry["rendered"] = {
             "available": render_result.available,
+            "browser_available": render_result.browser_available,
             "mode": render_result.mode,
             "html": render_result.html,
             "render_ms": render_result.render_ms,
@@ -185,7 +191,7 @@ def build_artifact(url: str, config: dict, *, deadline: float | None = None,
         "requested_url": SF.redact_url(url),
         "final_url": SF.redact_url(url),
         "fetched_at": utc_now(),
-        "user_agent": config.get("fetch", {}).get("user_agent", ""),
+        "user_agent": SF.user_agent(config),
         "robots": {"checked": False, "allowed": True, "crawl_delay": None,
                    "status": None, "sitemaps": []},
         "language": {"detected": None, "source": None, "supported": False},

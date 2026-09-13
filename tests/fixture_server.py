@@ -24,6 +24,8 @@ import threading
 import zlib
 from pathlib import Path
 
+import brotli
+
 log = logging.getLogger("fixture-server")
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
@@ -82,6 +84,11 @@ SIMPLE_PAGE = """<!DOCTYPE html><html lang="en"><head><title>{title}</title></he
 def _bomb(size_mb: int = 60) -> bytes:
     """Highly compressible payload: tiny on the wire, large once decoded."""
     return zlib.compress(b"A" * (size_mb * 1024 * 1024), 9)
+
+
+def _brotli_bomb(size_mb: int = 60) -> bytes:
+    """The same shape in Brotli: kilobytes on the wire, tens of megabytes once decoded."""
+    return brotli.compress(b"A" * (size_mb * 1024 * 1024), quality=1)
 
 
 class FixtureHandler(http.server.BaseHTTPRequestHandler):
@@ -145,6 +152,40 @@ class FixtureHandler(http.server.BaseHTTPRequestHandler):
             "/bomb": lambda: self._send(
                 _bomb(), content_type="text/html",
                 extra_headers={"Content-Encoding": "deflate", "Content-Length-Hint": "small"}),
+
+            # Content encodings, one route per case. We advertise `gzip, deflate`, so every other
+            # compressed route here is a server answering in something it was never offered:
+            # non-compliant, and real.
+            "/gzipped-page": lambda: self._send(
+                gzip.compress(SIMPLE_PAGE.format(title="Gzipped").encode()),
+                extra_headers={"Content-Encoding": "gzip"}),
+            "/deflate-page": lambda: self._send(
+                zlib.compress(SIMPLE_PAGE.format(title="Deflated").encode()),
+                extra_headers={"Content-Encoding": "deflate"}),
+            "/brotli-page": lambda: self._send(
+                brotli.compress(SIMPLE_PAGE.format(title="Brotli").encode()),
+                extra_headers={"Content-Encoding": "br"}),
+            # gzip applied first, then br, so it has to be undone in reverse order.
+            "/layered-gzip-br": lambda: self._send(
+                brotli.compress(gzip.compress(SIMPLE_PAGE.format(title="Layered").encode())),
+                extra_headers={"Content-Encoding": "gzip, br"}),
+            "/identity-page": lambda: self._send(
+                SIMPLE_PAGE.format(title="Identity").encode(),
+                extra_headers={"Content-Encoding": "identity"}),
+            # Bodies that claim an encoding they do not contain.
+            "/brotli-malformed": lambda: self._send(
+                b"\x1b\x2e\x00\x00\x8c\x8d\x3f\xa1" + b"\x00" * 64, content_type="text/html",
+                extra_headers={"Content-Encoding": "br"}),
+            "/gzip-malformed": lambda: self._send(
+                b"\x1f\x8b\x08\x00" + b"not really gzip" * 8, content_type="text/html",
+                extra_headers={"Content-Encoding": "gzip"}),
+            # An encoding urllib3 has never decoded, so this refusal cannot flip with what is installed.
+            "/compress-unrequested": lambda: self._send(
+                b"\x1f\x9d\x90" + b"\x00" * 64, content_type="text/html",
+                extra_headers={"Content-Encoding": "compress"}),
+            "/brotli-bomb": lambda: self._send(
+                _brotli_bomb(), content_type="text/html",
+                extra_headers={"Content-Encoding": "br"}),
 
             "/redirect-loop": lambda: self._send(
                 b"", 302, extra_headers={"Location": f"http://127.0.0.1:{port}/redirect-loop"}),

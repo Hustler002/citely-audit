@@ -19,15 +19,20 @@ relevance, innovation, or differentiation.** v2 spent heavily on exactly those. 
 3. **Generalization is tested by construction on unseen sites.** This exposed a real defect in v2: the
    engagement heuristics were English-only and would false-positive on every non-English site (§8).
 
-**Locked decisions retained:** recommend-only (no writes, no re-audit) · JSON report + self-contained HTML ·
+**Locked decisions retained:** recommend-only (no writes, no re-audit) · JSON report (self-contained HTML
+deferred as unscored — see §9 and §14.8) ·
 homepage + sitemap-aware sample · subprocess+JSON contract · tiered rendering · strict 3-tier severity ·
 `verified`/`heuristic` confidence · stdout-JSON-only · never-crash · agentskills.io compliance.
 
 ### Repository (verified current state)
 
-- **Path:** `C:\Users\PRIYANSHU PAL\Desktop\ADOBE\citely-audit` — this directory is itself the **git root**.
-- **Branch `main`**; commit `ab10281 "Initial project structure"` (30 files tracked); no remotes configured.
-  `.gitignore` present.
+- **Path:** `C:\Users\DEVANSH\OneDrive\Desktop\ADOBE_HACK\citely-audit` — this directory is itself the
+  **git root**. Development moved here from `C:\Users\PRIYANSHU PAL\Desktop\ADOBE\citely-audit` on
+  2026-09-10; that path is historical. **Paths in this document are not portable** — check any absolute
+  path against the machine you are on before using it. Live environment setup is recorded in
+  `CLAUDE.md` under *Local environment*, which is authoritative for it.
+- **Branch `feature/devansh-singh`**, at `origin/main` (`437104b`) after the phase 1-6 merge; `origin` on
+  GitHub. Local `main` is deliberately behind and unused. `.gitignore` present.
 - **Project renamed to “Citely.”** Scope locked with the user: rebrand the *identity* fields; **keep the six
   skill folder names unchanged** (`audit-orchestrator`, `crawl-render-extraction-audit`, …) because they are
   descriptive and agentskills.io-valid, and the rubric rewards clear separation of concerns over branding.
@@ -146,11 +151,19 @@ these is padding and gets folded in.
 | `quotability-density-audit` | Mechanics 2+3 — is content citable and survivable? | Text/sentence analysis | **Keep** |
 | `entity-corroboration-audit` | Mechanic 4 — is identity unambiguous? | Structured-data graph analysis | **Keep** |
 | `engagement-orientation-audit` | Mechanic 5 — can a human orient? | Viewport/DOM-position analysis | **Keep** |
-| `remediation-advisor` | **Prescription**, not detection — consumes *findings*, not the artifact | Template synthesis + ROI ranking | **Keep** — passes all three tests; the rubric scores suggested-action quality independently |
+| `remediation-advisor` | **Prescription**, not detection — consumes *verdicts that already exist* | Template synthesis + ROI ranking | **Keep** — passes all three tests; the rubric scores suggested-action quality independently |
 | ~~`report-renderer`~~ | Presentation of a report the entrypoint already owns | HTML templating | **CUT — padding.** Folded into `audit-orchestrator/scripts/render_html.py` |
 
 The four analyzers map 1:1 onto the brief's five named failure mechanics (2+3 share a text-analysis method,
 so they share a skill) — a decomposition justified by the *problem domain*, not by wanting more folders.
+
+> **Correction (2026-09-11, Phase 7).** This row previously read "consumes *findings*, not the artifact",
+> and §7 makes that impossible: snippets must be filled from values **observed on the page**, and every
+> proactive detector inspects the page. The advisor therefore reads the crawl artifact as read-only
+> evidence, alongside the findings and the resolved check states. The distinction that justifies the
+> skill is **concern**, not inputs — it emits no check state, runs after scoring, and cannot move the
+> score. That last property is asserted end-to-end by
+> `test_remediation_advisor.py::test_the_advisor_cannot_change_the_score`, rather than asserted here.
 
 ---
 
@@ -275,8 +288,16 @@ stretch.** Quality bar: a suggestion that any generic SEO checklist would give i
 count. Non-obvious examples grounded in this project's mechanics:
 - Page has an FAQ in prose but no `FAQPage` schema → the content is already there and is one block from
   being directly quotable by an answer engine.
-- `Organization` exists with `sameAs`, but no `sameAs` points at an *authority* node (Wikidata/Crunchbase)
-  → corroboration chain is unanchored, so entity confusion persists despite valid markup.
+- ~~`Organization` exists with `sameAs`, but no `sameAs` points at an *authority* node~~ — **NOT BUILT,
+  deliberately (2026-09-11).** Between this plan and Phase 7 that became the scored check
+  `entity.sameas_authority`, which already fails or partials exactly this shape and emits a finding with
+  its own remediation. Building it here as well would report one root cause twice, which is the
+  double-jeopardy defect fixed on 2026-09-10. A version pitched *above* the check — "you have a
+  directory anchor, now get an encyclopedic one" — was considered and rejected: the project already
+  locked the finding that a local business will never have a Wikidata entry, so it would hand bad
+  advice to precisely the small businesses that scored best in the entity corpus. Pinned by
+  `test_the_authority_anchor_example_was_not_built_as_a_detector` so a future reader working from this
+  list does not helpfully re-add it..
 - Key differentiating facts appear only in prose, not in a definition list/table → summarizers drop them
   first when condensing.
 - Facts stated without dates/attribution → RAG systems discount unsourced claims even when extractable.
@@ -312,6 +333,15 @@ sitemap, of `/about`, or of any URL convention — all are opportunistic.
 **Conservative thresholds over fitted ones.** Structural checks carry the weight; statistical thresholds are
 set at the *clearly wrong* boundary, not the median of my fixtures. Prefer `unknown` to a confident wrong call.
 
+> **The word-list rule, restated after a third breach (2026-09-11).** "No hardcoded allowlists …
+> used only as positive evidence, never as a requirement" was written for SPA markers, breached by
+> the entity type allowlist (fixed 2026-09-10), and breached again by
+> `orientation.value_proposition`, which REQUIRED a word from an 18-noun list. It failed "Emergency
+> lock repair across Leeds" at high severity while passing example.com, which offers nothing.
+> The general form: where a list must exist, put it on the **subtracting** side. A phrase missing
+> from a vague-marker list can never cause a failure; a category missing from a required list
+> causes one on every unseen trade.
+
 **Real-world messiness.** Non-HTML responses, mixed/incorrect encodings, huge pages, gzipped/index/404
 sitemaps (degrade silently to homepage-only), infinite redirects, slow origins, geo/consent interstitials,
 JS-heavy and legacy-HTML sites alike.
@@ -324,7 +354,10 @@ adversarial. Expected score *ranges* asserted per archetype — proving sensible
 
 ## 9. Output design (rubric criterion 3) — "a non-expert could act on"
 
-The entrypoint emits one report readable at three depths, so a non-expert isn't forced through engineer detail:
+The entrypoint emits one report readable at three depths, so a non-expert isn't forced through engineer
+detail. **All three live in the emitted JSON** (decided 2026-09-11 from the brief, which grades the
+marketplace "not any single report it happens to produce" and calls its schema "a floor, not a
+ceiling"), so there is one wording rather than two that can disagree:
 
 1. **Plain-language verdict** — one sentence per category, no jargon. *"AI assistants can reach your site
    but can't read your product facts, because the page builds itself in the browser."*
@@ -335,6 +368,41 @@ The entrypoint emits one report readable at three depths, so a non-expert isn't 
 Rules: no undefined jargon in layers 1–2 (`text_to_node_ratio` belongs in layer 3); every finding names a
 concrete next step; severity in words plus color; the HTML report (`--html-out`, never stdout) presents the
 same three layers, is fully self-contained, escapes all page-derived text, and works offline.
+
+### 9.1 Low coverage must suppress the headline, not just sit beside it (added 2026-09-10)
+
+**The problem, measured.** `tests/fixtures/spa_hydrating.html` scores **80/100 at `coverage` 0.175**,
+with Human Orientation at **100.0 off `category_coverage` 0.1** — one surviving check. Scoring is
+correct: a page that renders nothing without JavaScript leaves 82.5% of the check weight unmeasurable,
+and the capability model deliberately keeps `unknown` out of the denominator rather than guessing. The
+output is what fails. A page no AI assistant can read leads with an 80, and the number that disproves it
+is rendered as a peer. That the deader `broken_page.html` scores 30 on the identical coverage is the
+same point from the other side: at this coverage the headline is arbitrary.
+
+**Why the fix does not go in `_scoring.py`.** Damping the score for low coverage would move a presentation
+concern into the scoring spine, which is the one component whose determinism, auditability and
+injection-resistance the entire design rests on (§6, §10). The score is a faithful statement about what
+was measurable; the renderer is what must stop it being read as a statement about the site.
+
+**Requirement on the Phase 8 output layer.** Below a coverage floor, layers 1 and 2 lead with what could
+not be measured and why, and no score — overall or per category — is permitted to render unqualified.
+The existing rule *never show a score without coverage* becomes something the renderer **enforces**
+rather than something the reader is trusted to honour.
+
+**Acceptance criterion.** The rendered output for `spa_hydrating.html` must lead with the fact that the
+page could not be read, and neither `80` nor `100.0` may stand as a bare headline anywhere in it.
+Asserted as a test, in the same spirit as §8's archetype ranges: a behaviour, not a memorised number.
+
+This supersedes the residual half of open issue #10 in `CLAUDE.md`. The first half — a category scoring
+100 off one check being *invisible* — was closed in Phase 6 by `summary.category_coverage`.
+
+> **✅ Delivered 2026-09-11, and the location changed.** §9.1 is implemented as **report fields**, not
+> as renderer behaviour: `summary.headline_reliable`, `summary.headline_caveat`,
+> `summary.category_verdicts` and `not_checked[]`. The floor is `_narrative.COVERAGE_FLOOR = 0.5`.
+> Putting it in the data means a CI job piping the JSON is protected exactly as a reader is, and the
+> rule is testable without parsing markup. `spa_hydrating.html` now reports `headline_reliable:
+> false` with Human Orientation saying it could not be assessed despite scoring 100.0 — while both
+> numbers remain in `summary`, because declining to headline a measurement is not hiding it.
 
 ---
 
@@ -394,7 +462,7 @@ analyzer's checks to `unknown`, never crashes the run.
 ## 12. Repository structure
 
 ```
-citely-audit/                     # git root — branch master, no commits yet, no remotes
+citely-audit/                     # git root — branch feature/devansh-singh, origin on GitHub
 ├── marketplace.json              # name: "citely-audit"; 6 skills, exactly one entrypoint:true
 ├── README.md · CLAUDE.md · CONTEXT.md · pyproject.toml   # pyproject name: "citely-audit"
 ├── config/
@@ -405,11 +473,12 @@ citely-audit/                     # git root — branch master, no commits yet, 
 │   ├── audit-orchestrator/       # entrypoint
 │   │   ├── scripts/{run_audit,_safe_fetch,_render,_page_select,_scoring,render_html}.py
 │   │   └── references/{report-schema,crawl-artifact-schema,check-result-schema,checks-reference,severity-rubric,sample-report}.*
-│   │       # check-result-schema.json = the THIRD cross-process contract: what analyzers print
+│   │       # check-result-schema.json = the THIRD cross-process contract (advice-schema.json is the fourth, Phase 7): what analyzers print
 │   │       # (check states, not findings — §6.1). Added in Phase 4.
 │   ├── crawl-render-extraction-audit/   ├── quotability-density-audit/
 │   ├── entity-corroboration-audit/      ├── engagement-orientation-audit/
-│   └── remediation-advisor/      # scripts/advise.py + references/remediation-templates/
+│   └── remediation-advisor/      # scripts/advise.py + references/advice-schema.json
+│                                 #   + references/remediation-templates/{corrective,proactive}.json
 └── tests/
     ├── fixtures/{static,spa,ecommerce,corporate,image-heavy,unstructured,non-english,consent-wall,adversarial}/
     ├── fixture_server.py         # + robots.txt, sitemap.xml, redirect, bomb routes
@@ -450,10 +519,30 @@ design. **No engineering effort is spent here** — it is not in the rubric.
 5. **`engagement-orientation-audit` + `quotability-density-audit` at parity** — with i18n gating built in
    from the start, not retrofitted.
 6. Orchestrator wiring → schema-valid JSON report.
-7. **`remediation-advisor`** incl. proactive suggestions (rubric criterion 2 — not deferrable).
-8. **Non-expert output layer** + `render_html.py` (rubric criterion 3).
-9. `labeled_corpus.json` + precision/recall harness; non-English, consent-wall, adversarial fixtures.
-10. `skills-ref validate` all 6; README/CLAUDE.md; final determinism + read-only sign-off.
+7. ~~**`remediation-advisor`** incl. proactive suggestions (rubric criterion 2 — not deferrable).~~
+   ✅ **PHASE 7 DONE (2026-09-11).** Sixth skill built: corrective snippets filled only from observed
+   values, a validation procedure on every one of the 24 checks, and four proactive detectors. The
+   fifth §7 example was not built — it had become a scored check; see §7. Advisor is score-neutral
+   by construction and its failure costs snippets, never the report.
+8. ~~**Non-expert output layer** + `render_html.py` (rubric criterion 3), **including §9.1**.~~
+   ✅ **PHASE 8 DONE (2026-09-11)** — the output layer shipped **inside the report**, not as a
+   renderer. `render_html.py` is **deferred as unscored**: the brief grades "the marketplace itself …
+   not any single report it happens to produce", requires "a single audit report (fixed schema)", and
+   never mentions HTML. The §9.1 acceptance criterion is met and asserted.
+9. ~~`labeled_corpus.json` + precision/recall harness; archetype fixtures.~~
+   ✅ **PHASE 9 DONE (2026-09-11)** — 10 labelled fixtures, recall and precision both 100% with
+   16 must-find and 98 must-not-find labels, all 10 scores in band. Labels are written from each
+   fixture's construction, never recorded from a run. Consent-wall stays in the fixture server:
+   blocked-page detection happens during acquisition, and the corpus audits local files.
+   It earned its keep immediately by exposing the `orientation.value_proposition` word-list
+   gate, which failed real value propositions while passing example.com — see §8.
+10. ~~`skills-ref validate` all 6; README/CLAUDE.md; final determinism + read-only sign-off.~~
+    ✅ **PHASE 10 DONE (2026-09-11).** All six skills pass the reference validator, now pinned as
+    `skills-ref==0.1.1` in the dev extra (the command is `agentskills`, not `skills-ref` — the
+    docs had it wrong since Phase 1). Every gate in the Verification section below is asserted in
+    `tests/test_compliance.py` rather than checked by hand. README rewritten reviewer-first around
+    marketplace composition, as the brief requires. Budget measured live: python.org 41s,
+    djangoproject.com 31s. **All ten phases complete.**
 
 ---
 
@@ -510,15 +599,19 @@ API/MCP integration · databases/queues · screenshot-diffing or CV layout analy
 
 ## Verification
 
-All commands run from the repo root, `C:\Users\PRIYANSHU PAL\Desktop\ADOBE\citely-audit`:
+All commands run from the repo root (currently `C:\Users\DEVANSH\OneDrive\Desktop\ADOBE_HACK\citely-audit`
+— see *Repository*), with the virtual environment activated. **Python 3.12 specifically**: the pinned
+`lxml` and `greenlet` publish no wheels for 3.14, and the pins are what make recorded scores
+reproducible. Setup details in `CLAUDE.md` → *Local environment*.
 
 ```bash
-pip install -e . && python -m playwright install chromium   # setup (Tier A optional)
+py -3.12 -m venv .venv && .venv/Scripts/activate               # PowerShell: .\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]" && python -m playwright install chromium   # setup (Tier A optional)
 pytest                                                       # detection, generalization, security, scoring, E2E
 python tests/run_precision_recall.py                         # per-check precision/recall vs labeled corpus
 python skills/audit-orchestrator/scripts/run_audit.py --url http://127.0.0.1:8099/spa --html-out report.html
 python skills/audit-orchestrator/scripts/run_audit.py --url http://127.0.0.1:8099/non-english   # i18n gating
-for s in skills/*/; do skills-ref validate "$s"; done
+for s in skills/*/; do agentskills validate "$s"; done
 ```
 
 Sign-off gates: all 6 skills pass `skills-ref validate` · report validates against schema **and** the

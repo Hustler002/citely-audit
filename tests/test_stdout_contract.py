@@ -155,17 +155,37 @@ def test_configure_logging_wins_against_a_library_that_grabbed_stdout_first(modu
     assert "must-not-reach-stdout" in proc.stderr
 
 
-@pytest.mark.parametrize("module", ["run_audit", "crawl_render_extract", "entity_corroboration",
-                                    "quotability_density", "engagement_orientation"])
-def test_every_skill_configures_logging_with_force(module):
+def _scripts_defining_configure_logging():
+    """Discovered from the tree, never listed by hand.
+
+    This was a hardcoded list of five modules under a docstring promising it covered EVERY skill.
+    Adding a sixth skill would have left the promise false and the new skill unguarded — the same
+    way `test_embedded_thresholds_match_registry` silently missed two analyzers while this
+    project's notes claimed drift was caught by tests. Globbing cannot go stale.
+    """
+    found = []
+    for path in sorted((REPO_ROOT / "skills").rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        if "def configure_logging" in path.read_text(encoding="utf-8"):
+            found.append(path)
+    return found
+
+
+def test_the_logging_discovery_actually_finds_every_skill():
+    """A guard whose input set is empty, or short, silently guards nothing."""
+    found = _scripts_defining_configure_logging()
+    skills = {p.parent.parent.name for p in found}
+    declared = {s["id"] for s in json.loads(
+        (REPO_ROOT / "marketplace.json").read_text(encoding="utf-8"))["skills"]}
+    assert skills == declared, f"skills without a configure_logging: {declared - skills}"
+
+
+@pytest.mark.parametrize("path", _scripts_defining_configure_logging(),
+                         ids=lambda p: p.parent.parent.name)
+def test_every_skill_configures_logging_with_force(path):
     """The duplicated helper is deliberate — skills are self-contained and never import each other
     — so, like the embedded thresholds, it needs a drift guard rather than trust."""
-    for skill in ANALYZERS:
-        if ANALYZERS[skill][:-3] == module:
-            path = analyzer_path(skill)
-            break
-    else:
-        path = SCRIPTS / "run_audit.py"
     source = path.read_text(encoding="utf-8")
     assert "force=True" in source
     assert "logging.basicConfig(stream=sys.stderr, level=level, force=True" in source

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://citely-audit/check-result-schema.json",
   "title": "Citely Analyzer Output",
-  "description": "What every analyzer subprocess prints to stdout: a JSON array of CHECK STATES, not findings. PLAN.md §6.1 — 'Checks, not findings, are the unit'. Finding wording (title, impact, plain_summary) lives once in config/checks.json and is applied by the orchestrator, so analyzers never duplicate report text and it cannot drift. Maps 1:1 onto _scoring.CheckResult.",
+  "description": "What every analyzer subprocess prints to stdout: a JSON array of CHECK STATES, not findings. A check state is the unit of measurement; a finding is the report's presentation of one. Finding wording (title, impact, plain_summary) lives once in config/checks.json and is applied by the orchestrator, so analyzers never duplicate report text and it cannot drift. Maps 1:1 onto _scoring.CheckResult.",
   "type": "array",
   "items": {
     "type": "object",

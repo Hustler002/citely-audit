@@ -1,0 +1,496 @@
+{
+  "site": "www.craigslist.org",
+  "audited_at": "2026-09-12T18:45:24Z",
+  "summary": {
+    "total_findings": 8,
+    "critical": 1,
+    "high": 2,
+    "medium": 5,
+    "discoverability_score": 69,
+    "category_scores": {
+      "ai_comprehension": 59.6,
+      "ai_discoverability": 95.6,
+      "entity_trust": 51.0,
+      "human_orientation": 70.7
+    },
+    "score_confidence": 0.97,
+    "coverage": 0.823,
+    "category_coverage": {
+      "ai_comprehension": 0.57,
+      "ai_discoverability": 0.9,
+      "entity_trust": 1.0,
+      "human_orientation": 0.82
+    },
+    "verdict": "AI assistants can work with your site, but several things are holding back how often it gets cited.",
+    "headline_reliable": true,
+    "headline_caveat": null,
+    "category_verdicts": {
+      "ai_comprehension": "Your page can be read, but its key facts are hard to lift out and quote.",
+      "ai_discoverability": "AI assistants can reach your page and read what is on it.",
+      "entity_trust": "Your page gives some sense of who you are, but not enough to tell you apart from a similarly named business.",
+      "human_orientation": "A visitor arriving from an AI answer has to work to tell what you do."
+    }
+  },
+  "diagnostics": {
+    "total_ms": 82468,
+    "crawl_ms": 76531,
+    "playwright_available": true,
+    "render_mode": "playwright",
+    "render_nav_state": "ok",
+    "render_wait_strategy": "load",
+    "pages_checked": [
+      "https://www.craigslist.org/",
+      "https://www.craigslist.org/area/lucknow"
+    ],
+    "pages": [],
+    "language_detected": null,
+    "language_supported": false,
+    "user_agent": "CitelyAuditBot/0.1",
+    "robots_checked": true,
+    "external_lookup": false,
+    "advisor": {
+      "language_gated": [
+        "R:facts_in_prose",
+        "R:undated_claims"
+      ]
+    },
+    "checks_evaluated": 21,
+    "checks_unknown": 3,
+    "errors": []
+  },
+  "partial": false,
+  "partial_reason": null,
+  "findings": [
+    {
+      "title": "No heading in the first viewport",
+      "severity": "critical",
+      "category": "human_orientation",
+      "check_id": "orientation.heading_first_viewport",
+      "confidence": "verified",
+      "plain_summary": "Visitors do not see a clear headline when they land.",
+      "signal": "Presence of an h1 or hero heading within the first viewport height",
+      "measurement": 0,
+      "threshold": {
+        "first_viewport_px": 800,
+        "dom_proxy_text_chars": 1200,
+        "chrome_text_weight": 0.1,
+        "chrome_text_cap": 400
+      },
+      "evidence": "No heading renders within the first 800px, so a visitor cannot confirm they landed in the right place",
+      "selector": null,
+      "page_url": "https://www.craigslist.org/",
+      "impact": "A visitor arriving from an AI answer has seconds to confirm they landed in the right place. No heading means no confirmation.",
+      "points_recoverable": 6.0,
+      "suggested_action": {
+        "summary": "Put a clear headline at the top of the page so arriving visitors immediately see what it is.",
+        "priority": "critical",
+        "target": "the first elements inside <main>",
+        "snippet": "<!-- The first thing in <main> should be the heading, not a carousel or a banner. -->\n<main>\n  <h1>{{HEADLINE}}</h1>\n  <p>{{SUPPORTING_SENTENCE}}</p>\n</main>",
+        "validation": "Load the page at 1280x800 and confirm a real heading is visible without scrolling. A visitor arriving from an AI citation decides in that first screen whether they reached the right place.",
+        "placeholders_remaining": [
+          "{{HEADLINE}}",
+          "{{SUPPORTING_SENTENCE}}"
+        ]
+      },
+      "id": "F-001"
+    },
+    {
+      "title": "Identity is declared only weakly",
+      "severity": "high",
+      "category": "entity_trust",
+      "check_id": "entity.organization_declared",
+      "confidence": "verified",
+      "plain_summary": "Your page names who it is, but not in a form machines can corroborate.",
+      "signal": "A schema.org entity of an accepted identity type in the structured data graph",
+      "measurement": "open_graph:craigslist",
+      "threshold": {
+        "accepted_types": [
+          "Organization",
+          "Person",
+          "LocalBusiness",
+          "Corporation",
+          "NGO",
+          "NewsMediaOrganization",
+          "EducationalOrganization",
+          "GovernmentOrganization",
+          "SportsOrganization",
+          "Airline",
+          "Consortium",
+          "Cooperative",
+          "MedicalOrganization",
+          "PerformingGroup",
+          "Project",
+          "Brand",
+          "Store",
+          "Restaurant",
+          "Dentist",
+          "Physician",
+          "LegalService",
+          "HomeAndConstructionBusiness",
+          "FoodEstablishment",
+          "HealthAndBeautyBusiness",
+          "AutomotiveBusiness",
+          "FinancialService",
+          "ProfessionalService",
+          "EntertainmentBusiness",
+          "LodgingBusiness",
+          "TravelAgency"
+        ],
+        "identity_properties": [
+          "address",
+          "telephone",
+          "email",
+          "sameAs",
+          "logo",
+          "founder",
+          "vatID",
+          "taxID",
+          "openingHours",
+          "openingHoursSpecification",
+          "geo",
+          "contactPoint",
+          "hasMap",
+          "aggregateRating",
+          "duns",
+          "leiCode",
+          "naics",
+          "isicV4"
+        ],
+        "min_identity_properties": 2
+      },
+      "evidence": "Identity declared only via Open Graph (\"craigslist\"). This names the site but carries no schema.org type and no sameAs links, so an AI cannot corroborate it against an authoritative source.",
+      "selector": "meta[property=\"og:site_name\"]",
+      "page_url": "https://www.craigslist.org/",
+      "impact": "This is the anchor that tells an AI who the page is about. Without it the brand has no declared identity to attach facts to.",
+      "points_recoverable": 3.0,
+      "suggested_action": {
+        "summary": "Add a JSON-LD Organization (or Person) entry that names who this site is about.",
+        "priority": "high",
+        "target": "the Organization node in your JSON-LD",
+        "snippet": "<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"craigslist\",\n  \"url\": \"https://www.craigslist.org/area/lucknow\",\n  \"logo\": \"{{LOGO_URL}}\",\n  \"description\": \"craigslist provides local classifieds and forums for jobs, housing, for sale, services, local community, and events\"\n}\n</script>\n\n<!-- Use a more specific @type if one fits — Dentist, Bakery, LocalBusiness, SoftwareApplication.\n     A specific type carries more meaning than the generic one, and any schema.org subtype counts. -->",
+        "validation": "Run the Rich Results Test and confirm the detected entity's name matches the brand name a visitor sees in your header. A mismatch is worse than no markup: it tells the machine you are a different organisation.",
+        "placeholders_remaining": [
+          "{{LOGO_URL}}"
+        ]
+      },
+      "id": "F-002"
+    },
+    {
+      "title": "Your identity is not linked to anything else",
+      "severity": "high",
+      "category": "entity_trust",
+      "check_id": "entity.sameas_present",
+      "confidence": "verified",
+      "plain_summary": "Nothing on the page connects you to your profiles or listings elsewhere on the web.",
+      "signal": "sameAs property on the declared entity",
+      "measurement": 0,
+      "threshold": {
+        "min_links": 1
+      },
+      "evidence": "No sameAs, rel=\"me\" or profile links on any audited page, so this identity is not connected to any other record of it on the web",
+      "selector": "script[type=\"application/ld+json\"]",
+      "page_url": "https://www.craigslist.org/",
+      "impact": "sameAs links let an AI corroborate your identity across the web instead of guessing between similarly named businesses.",
+      "points_recoverable": 5.0,
+      "suggested_action": {
+        "summary": "Add sameAs links from your Organization entry to the profiles and listings you already link to, such as your Google Business, Facebook or LinkedIn page. If you have no structured data yet, rel=\"me\" on those links is a valid alternative.",
+        "priority": "high",
+        "target": "the sameAs array on your Organization node",
+        "snippet": "<!-- sameAs states \"these profiles are me\". Add it to the Organization you already declare. -->\n<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"craigslist\",\n  \"url\": \"https://www.craigslist.org/area/lucknow\",\n  \"sameAs\": [\n{{SAMEAS_LINKS}}\n  ]\n}\n</script>\n\n<!-- With no structured data yet, rel=\"me\" on the links you already have is a valid alternative: -->\n<a rel=\"me\" href=\"{{PROFILE_URL}}\">craigslist on {{PLATFORM}}</a>",
+        "validation": "Confirm every URL in `sameAs` loads and is a profile you control. A dead or wrong link weakens corroboration instead of strengthening it.",
+        "placeholders_remaining": [
+          "{{SAMEAS_LINKS}}",
+          "{{PROFILE_URL}}",
+          "{{PLATFORM}}"
+        ]
+      },
+      "id": "F-003"
+    },
+    {
+      "title": "Heading structure is inconsistent",
+      "severity": "medium",
+      "category": "ai_comprehension",
+      "check_id": "content.heading_hierarchy",
+      "confidence": "verified",
+      "plain_summary": "Your headings are not in a sensible order.",
+      "signal": "Heading level sequence (h1 to h6) checked for skipped levels and multiple h1s",
+      "measurement": 0,
+      "threshold": {
+        "max_level_skip": 1
+      },
+      "evidence": "No headings at all, so there is no document outline for a summarizer to follow",
+      "selector": null,
+      "page_url": "https://www.craigslist.org/",
+      "impact": "Headings define the document outline summarizers use to decide which sections survive condensation.",
+      "points_recoverable": 3.2,
+      "suggested_action": {
+        "summary": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4).",
+        "priority": "medium",
+        "target": "the heading elements in <body>, in document order",
+        "snippet": "<!-- One h1, then descend one level at a time. Skipping levels breaks the outline. -->\n<h1>craigslist: lucknow jobs, apartments, for sale, services, community, and events</h1>\n  <h2>First major section</h2>\n    <h3>Detail within it</h3>\n  <h2>Second major section</h2>",
+        "validation": "List the headings in order and confirm there is exactly one `<h1>` and no level is skipped. Any outline tool or `document.querySelectorAll('h1,h2,h3,h4')` in the console will show the sequence."
+      },
+      "id": "F-004"
+    },
+    {
+      "title": "Page title is the wrong length",
+      "severity": "medium",
+      "category": "ai_comprehension",
+      "check_id": "content.title_descriptive",
+      "confidence": "verified",
+      "plain_summary": "Your page title exists but is too short or too long to work well.",
+      "signal": "Length and presence of the document title element",
+      "measurement": 79,
+      "threshold": {
+        "min_chars": 15,
+        "max_chars": 70
+      },
+      "evidence": "Title is 79 characters, longer than the 15-70 range: craigslist: lucknow jobs, apartments, for sale, services, community, and events",
+      "selector": "title",
+      "page_url": "https://www.craigslist.org/",
+      "impact": "The title is the strongest single hint an AI summarizer uses to decide what a page is about.",
+      "points_recoverable": 2.5,
+      "suggested_action": {
+        "summary": "Write a page title of roughly 15-70 characters that names the page and what it offers.",
+        "priority": "medium",
+        "target": "the <title> element in <head>",
+        "snippet": "<!-- In <head>. Name the thing, then what it is — not a bare brand token. -->\n<title>craigslist — {{WHAT_YOU_DO}}</title>",
+        "validation": "Confirm the rendered `<title>` is between 15 and 70 characters and names both the brand and what it does. Search your own brand name and check the result headline reads as a description, not a label.",
+        "placeholders_remaining": [
+          "{{WHAT_YOU_DO}}"
+        ]
+      },
+      "id": "F-005"
+    },
+    {
+      "title": "Semantic HTML landmarks are incomplete",
+      "severity": "medium",
+      "category": "ai_discoverability",
+      "check_id": "extraction.semantic_html",
+      "confidence": "verified",
+      "plain_summary": "Your page structure only partly marks out the main content.",
+      "signal": "Presence of main/article/header/nav landmarks delimiting content from chrome",
+      "measurement": "landmarks=header,nav",
+      "threshold": null,
+      "evidence": "Partial semantic structure, no main or article landmark: landmarks=header,nav",
+      "selector": null,
+      "page_url": "https://www.craigslist.org/",
+      "impact": "Semantic structure tells extractors which text is primary content versus navigation and boilerplate.",
+      "points_recoverable": 1.0,
+      "suggested_action": {
+        "summary": "Wrap the primary content in a <main> or <article> element, so extractors can tell content from navigation and boilerplate.",
+        "priority": "medium",
+        "target": "the page's top-level layout wrappers",
+        "snippet": "<!-- Replace generic wrappers with landmark elements. Same layout, machine-readable structure. -->\n<header> … site identity and navigation … </header>\n<main>\n  <article>\n    <h1>craigslist: lucknow jobs, apartments, for sale, services, community, and events</h1>\n    <section> … your primary content … </section>\n  </article>\n</main>\n<footer> … contact and legal … </footer>",
+        "validation": "View source and confirm exactly one `<main>` exists and your primary content sits inside it. Extraction tools use `<main>` to separate content from chrome."
+      },
+      "id": "F-006"
+    },
+    {
+      "title": "Open Graph identity tags are incomplete",
+      "severity": "medium",
+      "category": "entity_trust",
+      "check_id": "entity.opengraph_identity",
+      "confidence": "verified",
+      "plain_summary": "You have some social/preview tags, but not all the core ones.",
+      "signal": "Presence of core og: properties",
+      "measurement": "2/3",
+      "threshold": {
+        "required_properties": [
+          "og:title",
+          "og:type",
+          "og:url"
+        ]
+      },
+      "evidence": "Present: og:title, og:url; missing: og:type",
+      "selector": null,
+      "page_url": "https://www.craigslist.org/",
+      "impact": "Open Graph is a widely consumed secondary identity signal and a fallback when JSON-LD is absent or malformed.",
+      "points_recoverable": 1.2,
+      "suggested_action": {
+        "summary": "Add the core Open Graph tags (og:title, og:type, og:url) to the page head.",
+        "priority": "medium",
+        "target": "the Open Graph meta tags in <head>",
+        "snippet": "<!-- In <head>. Open Graph drives social previews; it is not a substitute for schema.org,\n     but a missing og:site_name loses the identity signal on every shared link. -->\n<meta property=\"og:site_name\" content=\"craigslist\">\n<meta property=\"og:title\" content=\"craigslist: lucknow jobs, apartments, for sale, services, community, and events\">\n<meta property=\"og:url\" content=\"https://www.craigslist.org/area/lucknow\">\n<meta property=\"og:type\" content=\"website\">\n<meta property=\"og:image\" content=\"{{LOGO_URL}}\">",
+        "validation": "Paste the URL into any link-preview debugger and confirm the site name and title shown are the ones you intend.",
+        "placeholders_remaining": [
+          "{{LOGO_URL}}"
+        ]
+      },
+      "id": "F-007"
+    },
+    {
+      "title": "Your identity is not anchored to any outside record",
+      "severity": "medium",
+      "category": "entity_trust",
+      "check_id": "entity.sameas_authority",
+      "confidence": "verified",
+      "plain_summary": "Nothing you link to is a record maintained by someone other than you.",
+      "signal": "sameAs targets matched against known authority domains",
+      "measurement": 0,
+      "threshold": {
+        "authority_domains": [
+          "wikidata.org",
+          "wikipedia.org",
+          "dbpedia.org",
+          "viaf.org",
+          "isni.org",
+          "ror.org",
+          "orcid.org",
+          "crunchbase.com",
+          "opencorporates.com",
+          "companieshouse.gov.uk",
+          "sec.gov",
+          "bloomberg.com",
+          "linkedin.com",
+          "g.page",
+          "business.site",
+          "maps.google.com",
+          "yelp.com",
+          "tripadvisor.com",
+          "trustpilot.com",
+          "bbb.org",
+          "glassdoor.com",
+          "indeed.com",
+          "yellowpages.com",
+          "thomasnet.com",
+          "angi.com",
+          "checkatrade.com",
+          "trustedtraders.which.co.uk",
+          "healthgrades.com",
+          "zocdoc.com",
+          "avvo.com",
+          "justia.com",
+          "github.com",
+          "gitlab.com"
+        ],
+        "social_profile_domains": [
+          "facebook.com",
+          "fb.com",
+          "instagram.com",
+          "twitter.com",
+          "x.com",
+          "youtube.com",
+          "tiktok.com",
+          "pinterest.com",
+          "threads.net",
+          "threads.com",
+          "snapchat.com",
+          "reddit.com",
+          "vimeo.com",
+          "flickr.com",
+          "tumblr.com",
+          "medium.com",
+          "substack.com",
+          "bsky.app",
+          "mastodon.social",
+          "weibo.com",
+          "vk.com",
+          "xing.com",
+          "line.me",
+          "t.me",
+          "telegram.me",
+          "whatsapp.com",
+          "wa.me"
+        ],
+        "share_path_markers": [
+          "/sharer",
+          "/share",
+          "/intent/",
+          "/shareartic",
+          "/submit",
+          "/dialog/",
+          "/send",
+          "/post?",
+          "/tweet",
+          "/pin/create"
+        ]
+      },
+      "evidence": "No identity links of any kind, so there is no chain to anchor",
+      "selector": null,
+      "page_url": "https://www.craigslist.org/",
+      "impact": "Corroboration needs a record the brand does not control. Links only to your own accounts leave an AI unable to tell you apart from a similarly named business.",
+      "points_recoverable": 3.0,
+      "suggested_action": {
+        "summary": "Link to at least one record somebody else maintains. A Google Business Profile, a Yelp or industry-directory listing, or a companies-registry entry all work; Wikidata or Wikipedia are the strongest but are not required.",
+        "priority": "medium",
+        "target": "the sameAs array on your Organization node",
+        "snippet": "<!-- Add at least one record somebody else maintains. Any ONE of these anchors your identity;\n     a local business does not need Wikidata, and a directory listing works just as well. -->\n\"sameAs\": [\n{{SAMEAS_LINKS_LEADING}}\n    \"{{AUTHORITY_PROFILE_URL}}\"\n]",
+        "validation": "Confirm at least one `sameAs` target is a record you do not publish yourself — a Google Business Profile, an industry directory, a companies registry or a review platform. Links only to your own accounts cannot settle which business you are.",
+        "placeholders_remaining": [
+          "{{SAMEAS_LINKS_LEADING}}",
+          "{{AUTHORITY_PROFILE_URL}}"
+        ]
+      },
+      "id": "F-008"
+    }
+  ],
+  "next_actions": [
+    {
+      "rank": 1,
+      "finding_id": "F-001",
+      "title": "No heading in the first viewport",
+      "severity": "critical",
+      "score_gain": 6.0,
+      "do": "Put a clear headline at the top of the page so arriving visitors immediately see what it is."
+    },
+    {
+      "rank": 2,
+      "finding_id": "F-003",
+      "title": "Your identity is not linked to anything else",
+      "severity": "high",
+      "score_gain": 5.0,
+      "do": "Add sameAs links from your Organization entry to the profiles and listings you already link to, such as your Google Business, Facebook or LinkedIn page. If you have no structured data yet, rel=\"me\" on those links is a valid alternative."
+    },
+    {
+      "rank": 3,
+      "finding_id": "F-004",
+      "title": "Heading structure is inconsistent",
+      "severity": "medium",
+      "score_gain": 3.2,
+      "do": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4)."
+    },
+    {
+      "rank": 4,
+      "finding_id": "F-002",
+      "title": "Identity is declared only weakly",
+      "severity": "high",
+      "score_gain": 3.0,
+      "do": "Add a JSON-LD Organization (or Person) entry that names who this site is about."
+    },
+    {
+      "rank": 5,
+      "finding_id": "F-008",
+      "title": "Your identity is not anchored to any outside record",
+      "severity": "medium",
+      "score_gain": 3.0,
+      "do": "Link to at least one record somebody else maintains. A Google Business Profile, a Yelp or industry-directory listing, or a companies-registry entry all work; Wikidata or Wikipedia are the strongest but are not required."
+    },
+    {
+      "rank": 6,
+      "finding_id": "F-005",
+      "title": "Page title is the wrong length",
+      "severity": "medium",
+      "score_gain": 2.5,
+      "do": "Write a page title of roughly 15-70 characters that names the page and what it offers."
+    },
+    {
+      "rank": 7,
+      "finding_id": "F-007",
+      "title": "Open Graph identity tags are incomplete",
+      "severity": "medium",
+      "score_gain": 1.2,
+      "do": "Add the core Open Graph tags (og:title, og:type, og:url) to the page head."
+    },
+    {
+      "rank": 8,
+      "finding_id": "F-006",
+      "title": "Semantic HTML landmarks are incomplete",
+      "severity": "medium",
+      "score_gain": 1.0,
+      "do": "Wrap the primary content in a <main> or <article> element, so extractors can tell content from navigation and boilerplate."
+    }
+  ],
+  "not_checked": [],
+  "recommendations": []
+}

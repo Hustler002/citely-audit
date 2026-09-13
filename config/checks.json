@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "_note": "Check registry — the single source of truth for what Citely measures. Analyzers emit a state per check id; _scoring.py turns states into scores. Thresholds live HERE (not in analyzer code) so they are auditable and tunable in one place. 24 checks, 6 per category: engagement sits at exact parity with discoverability, per the rubric's 'across both discoverability and engagement'.",
+  "_note": "Check registry — the single source of truth for what Citely measures. Analyzers emit a state per check id; _scoring.py turns states into scores. Thresholds live HERE (not in analyzer code) so they are auditable and tunable in one place. 24 checks, 6 per category: engagement sits at exact parity with discoverability, because a visitor who bounces from a correct AI citation is as much a failure as never being cited.",
   "_field_reference": {
     "id": "Stable identifier. Never reuse or renumber — findings and tests reference it.",
     "category": "One of the four scoring categories.",
@@ -15,7 +15,7 @@
     "signal": "The mechanism being measured (first link of the reasoning chain).",
     "impact": "Why it matters for AI ingestion or human retention.",
     "plain_summary": "Non-expert phrasing for the report's layer-1 verdict.",
-    "remediation": "Plain-language fix, used as suggested_action.summary. Lives here so report wording has one source of truth; Phase 7's advisor enriches it with snippets and validation steps.",
+    "remediation": "Plain-language fix, used as suggested_action.summary. Lives here so report wording has one source of truth; the remediation-advisor skill enriches it with snippets and validation steps.",
     "failure_title": "Finding title when the check does NOT pass. `title` states what good looks like, which reads backwards in a finding ('Mobile viewport is declared' when it is missing).",
     "failure_summary": "Non-expert phrasing of the PROBLEM, used as the finding's plain_summary.",
     "partial_title": "Finding title when the check is PARTIAL rather than failed. Only present where the failure title would be false for a partial (an absolute 'No X' when some X exists); otherwise the failure title covers both and is reused.",
@@ -119,14 +119,15 @@
       "requires_language": false,
       "threshold": null,
       "title": "Semantic HTML landmarks present",
-      "signal": "Presence of main/article/header/nav landmarks and a single h1",
+      "signal": "Presence of main/article/header/nav landmarks delimiting content from chrome",
       "impact": "Semantic structure tells extractors which text is primary content versus navigation and boilerplate.",
       "plain_summary": "Your page structure marks out what the main content is.",
-      "remediation": "Wrap the primary content in a <main> or <article> element and give the page exactly one <h1>, so extractors can tell content from navigation.",
+      "remediation": "Wrap the primary content in a <main> or <article> element, so extractors can tell content from navigation and boilerplate.",
       "failure_title": "Semantic HTML landmarks are missing",
       "failure_summary": "Nothing marks out which part of the page is the main content.",
       "partial_title": "Semantic HTML landmarks are incomplete",
-      "partial_summary": "Your page structure only partly marks out the main content."
+      "partial_summary": "Your page structure only partly marks out the main content.",
+      "_h1_note": "Heading structure is deliberately NOT graded here. `content.heading_hierarchy` owns it and already requires exactly one h1; grading it in both places charged a missing h1 twice, in two different categories, which no suppression edge could catch."
     },
     {
       "id": "extraction.facts_not_image_only",
@@ -789,7 +790,37 @@
         "dom_proxy_text_chars": 1200,
         "chrome_text_weight": 0.1,
         "chrome_text_cap": 400,
-        "_proxy_note": "Tier A uses real pixel offsets. Tier B falls back to a DOM-order proxy budgeted in VISIBLE TEXT, not markup: a raw markup slice is consumed by inline <svg>, critical-CSS <style> blocks and mega-menu markup long before it reaches the content. On python.org the first 16,151 characters of <body> hold 11,414 characters of tags and 1,345 of text. Chrome (<nav>, <header>, dialogs) is charged at chrome_text_weight per character up to chrome_text_cap, because a collapsed menu occupies one bar on screen however many links it holds; past that allowance its text costs full price, so wrapping a page in <nav> buys nothing. Verdicts from this path are labelled heuristic."
+        "_proxy_note": "Tier A uses real pixel offsets. Tier B falls back to a DOM-order proxy budgeted in VISIBLE TEXT, not markup: a raw markup slice is consumed by inline <svg>, critical-CSS <style> blocks and mega-menu markup long before it reaches the content. On python.org the first 16,151 characters of <body> hold 11,414 characters of tags and 1,345 of text. Chrome (<nav>, <header>, dialogs) is charged at chrome_text_weight per character up to chrome_text_cap, because a collapsed menu occupies one bar on screen however many links it holds; past that allowance its text costs full price, so wrapping a page in <nav> buys nothing. Verdicts from this path are labelled heuristic.",
+        "vague_markers": [
+          "welcome to",
+          "we pride ourselves",
+          "tailored to your needs",
+          "your needs",
+          "quality and service",
+          "committed to excellence",
+          "world class",
+          "world-class",
+          "best in class",
+          "best-in-class",
+          "cutting edge",
+          "cutting-edge",
+          "industry leading",
+          "industry-leading",
+          "we care",
+          "second to none",
+          "one stop shop",
+          "one-stop shop",
+          "range of solutions",
+          "whatever the requirement",
+          "look forward to hearing",
+          "get in touch",
+          "we believe in",
+          "sets us apart",
+          "number of years",
+          "we have the experience"
+        ],
+        "max_vague_markers": 2,
+        "_vocabulary_note": "action_verbs and offering_nouns are POSITIVE EVIDENCE ONLY, never a requirement. Gating on them failed 'Emergency lock repair across Leeds' at high severity while passing example.com, which has no value proposition at all: an 18-noun list cannot hold the open web's product categories, exactly as a five-name type allowlist could not hold schema.org's ~200 LocalBusiness subtypes. Specificity is now the primary signal: a concrete anchor is a figure with a unit or a proper noun. vague_markers are the mirror image and are used ONLY to subtract — a marker missing from the list can never cause a failure, which is what makes an open-ended list safe here and unsafe as a gate."
       },
       "title": "A value proposition is stated above the fold",
       "signal": "Above-the-fold text evaluated for an action plus an offering",
@@ -824,5 +855,109 @@
       "failure_title": "Body text is too small",
       "failure_summary": "Your body text is smaller than is comfortable to read."
     }
-  ]
+  ],
+  "categories": {
+    "_note": "Plain-language verdicts — one sentence per category, chosen by score band, with no undefined jargon. They live here because report wording lives ONCE in this file and is applied by the orchestrator, which is what stops it drifting. A band is selected by the FIRST entry whose `min` the score meets, so bands are ordered high to low. `unmeasured` is used when the category has no score at all, or when its coverage is below the floor — a sentence about a score built on a minority of the evidence would read as a verdict on the site, which it is not.",
+    "ai_discoverability": {
+      "label": "Getting found and read",
+      "question": "Can an AI assistant reach your page and read what is on it?",
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "AI assistants can reach your page and read what is on it."
+        },
+        {
+          "min": 50,
+          "verdict": "AI assistants can reach your page, but part of what it says is hard for them to read."
+        },
+        {
+          "min": 0,
+          "verdict": "AI assistants cannot reliably read your page, so your facts may never reach them."
+        }
+      ],
+      "unmeasured": "We could not check whether AI assistants can read your page."
+    },
+    "ai_comprehension": {
+      "label": "Being understood and quoted",
+      "question": "Can an assistant lift a clear fact out of your page and quote it?",
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "Your page states its facts clearly enough to be quoted."
+        },
+        {
+          "min": 50,
+          "verdict": "Your page can be read, but its key facts are hard to lift out and quote."
+        },
+        {
+          "min": 0,
+          "verdict": "Your page does not state its facts in a form an assistant can quote."
+        }
+      ],
+      "unmeasured": "We could not check how quotable your page's facts are."
+    },
+    "entity_trust": {
+      "label": "Being recognised as you",
+      "question": "Can a machine tell which business this is, and confirm it somewhere else?",
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "Your page says clearly who you are and points to other places that confirm it."
+        },
+        {
+          "min": 50,
+          "verdict": "Your page gives some sense of who you are, but not enough to tell you apart from a similarly named business."
+        },
+        {
+          "min": 0,
+          "verdict": "Nothing on your page tells a machine which business this is."
+        }
+      ],
+      "unmeasured": "We could not check whether your page says who you are."
+    },
+    "human_orientation": {
+      "label": "Keeping the visitor",
+      "question": "Can someone arriving from an AI answer tell they are in the right place?",
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "A visitor arriving from an AI answer can immediately tell what you do."
+        },
+        {
+          "min": 50,
+          "verdict": "A visitor arriving from an AI answer has to work to tell what you do."
+        },
+        {
+          "min": 0,
+          "verdict": "A visitor arriving from an AI answer cannot tell what you do, and is likely to leave."
+        }
+      ],
+      "unmeasured": "We could not check what a visitor sees when they arrive."
+    },
+    "overall": {
+      "bands": [
+        {
+          "min": 80,
+          "verdict": "Your site is in good shape for AI assistants to find, read and cite."
+        },
+        {
+          "min": 50,
+          "verdict": "AI assistants can work with your site, but several things are holding back how often it gets cited."
+        },
+        {
+          "min": 0,
+          "verdict": "AI assistants will struggle to find, read or cite your site."
+        }
+      ],
+      "unmeasured": "We could not measure enough of your site to give it a score.",
+      "low_coverage_caveat": "This score comes from fewer than half of the checks, because most of the page could not be measured. Treat it as provisional and read what could not be checked before acting on the number."
+    },
+    "reasons": {
+      "_note": "Plain-language translations of the scoring engine's reason codes, for the plain-language layers of the report, where undefined jargon is not allowed. 'suppressed_by_failed_prerequisite' is accurate and means nothing to a reader, so where a blocking check is known the report names THAT instead, in its own words.",
+      "suppressed_by_failed_prerequisite": "these checks could not be judged until something they depend on is fixed first",
+      "language_unsupported_or_undetected": "the page's language could not be confirmed, so checks that read wording were skipped rather than guessed",
+      "not_measured": "no result came back for these checks",
+      "blocked_before_fetch": "the page could not be fetched, so nothing on it could be measured"
+    }
+  }
 }

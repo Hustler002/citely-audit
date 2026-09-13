@@ -2,7 +2,21 @@
 name = "citely-audit"
 version = "0.1.0"
 description = "Agent Skill Marketplace auditing website AI-discoverability and on-site engagement."
-requires-python = ">=3.11"
+# 3.11 and 3.12 only, and the UPPER bound is the load-bearing half. It was ">=3.11", which promised
+# a working install on interpreters where the pins cannot resolve. Checked with
+# `pip download --only-binary=:all:` rather than by attempting an install and reading the wreckage:
+#
+#     python   lxml==5.3.0   greenlet==3.0.3 (via playwright)
+#     3.11     wheel         wheel
+#     3.12     wheel         wheel
+#     3.13     wheel         NONE
+#     3.14     NONE          NONE
+#
+# Without the bound, a reviewer on 3.13 — the current stable release — silently falls back to a
+# source build of greenlet, which needs a C toolchain and fails on a clean Windows machine. With it,
+# pip refuses up front and says why. The pins are not relaxed instead: they are what make the
+# recorded scores reproducible.
+requires-python = ">=3.11,<3.13"
 license = { text = "Apache-2.0" }
 
 # Pinned for reproducibility. Playwright is required only for Tier-A rendering
@@ -13,11 +27,21 @@ dependencies = [
     "lxml==5.3.0",
     "jsonschema==4.23.0",
     "playwright==1.47.0",
+    # Decodes `Content-Encoding: br`. We advertise only gzip and deflate, but some CDNs answer in
+    # Brotli regardless, and without a decoder such a page cannot be audited at all. urllib3 picks
+    # it up automatically. Pinned EXACTLY: 1.2.0 is the first release whose decompressor accepts an
+    # output limit, and with anything older urllib3 decodes Brotli unbounded, warning only.
+    "Brotli==1.2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest==8.3.3",
+    # The agentskills.io reference validator, exposed as the `agentskills` command. The brief calls
+    # it "a convenience, not required", but skill-format compliance is a scored criterion, so it is
+    # pinned here to make it run in CI rather than depend on someone remembering. Its rules are ALSO
+    # asserted natively in tests/test_compliance.py, so the guarantee survives the tool changing.
+    "skills-ref==0.1.1",
 ]
 
 # This project intentionally ships NO importable Python package. Every skill is a

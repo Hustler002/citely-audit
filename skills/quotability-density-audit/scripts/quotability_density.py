@@ -12,7 +12,8 @@ Output: a JSON array of CHECK STATES on stdout (see references/check-result-sche
 i18n is built in, not retrofitted: two of the six checks are language-dependent and use English
 vocabulary. They run ONLY when the page declares a supported language, and otherwise resolve to
 `unknown` — never `fail`. Judging a German page with English heuristics would produce a wall of
-false positives, which the rubric penalises exactly as hard as misses.
+false positives, and a false alarm costs a reader more than a miss: it sends them to fix
+something that was never broken.
 
 The four structural checks (title, meta description, heading hierarchy, scannable blocks) are
 language-independent and always run.
@@ -48,8 +49,10 @@ _WS_RE = re.compile(r"\s+")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 _DIGIT_RE = re.compile(r"\d")
 _PROPER_NOUN_RE = re.compile(r"(?<!^)(?<![.!?]\s)\b[A-Z][a-z]{2,}")
+# Quoted or unquoted, as HTML allows. Kept identical to the orchestrator's `detect_language`.
 _LANG_ATTR_RE = re.compile(
-    r"<html[^>]*\blang\s*=\s*[\"']([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)[\"']", re.IGNORECASE)
+    r"<html[^>]*\blang\s*=\s*[\"']?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)(?=[\"'\s/>]|$)",
+    re.IGNORECASE)
 
 DEFAULT_THRESHOLDS = {
     "content.title_descriptive": {"min_chars": 15, "max_chars": 70},

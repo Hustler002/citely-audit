@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://citely-audit/report-schema.json",
   "title": "Citely Audit Report",
-  "description": "Superset of the mandatory schema floor. Every floor field (site, audited_at, summary{total_findings,critical,high,medium}, findings[]{id,title,severity,evidence,suggested_action{summary,priority}}) is REQUIRED here and must never be removed. All v3 additions are additive.",
+  "description": "Superset of the mandatory schema floor. Every floor field (site, audited_at, summary{total_findings,critical,high,medium}, findings[]{id,title,severity,evidence,suggested_action{summary,priority}}) is REQUIRED here and must never be removed. Everything beyond the floor is additive.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -51,7 +51,7 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 100,
-          "description": "The OVERALL score. Name retained from v1 for backward compatibility."
+          "description": "The OVERALL score, kept under this name so existing consumers keep working; per-category scores sit alongside it in category_scores."
         },
         "category_scores": {
           "type": "object",
@@ -130,6 +130,37 @@
               "maximum": 1
             }
           }
+        },
+        "verdict": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The headline in one plain sentence, with no undefined jargon. Chosen from config/checks.json by score band, so report wording has one home."
+        },
+        "headline_reliable": {
+          "type": "boolean",
+          "description": "False when coverage is below the floor (0.5). A score built on a minority of the evidence is a statement about the checks that were measurable, not about the site, and must not be presented as a verdict. Carried in the data so every consumer honours it, not just a renderer."
+        },
+        "headline_caveat": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Present only when headline_reliable is false, so a consumer can branch on its presence rather than parse prose."
+        },
+        "category_verdicts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "One plain sentence per category. A category whose own coverage is below the floor says it could not be assessed, even though its score stays in category_scores.",
+          "propertyNames": {
+            "enum": [
+              "ai_discoverability",
+              "ai_comprehension",
+              "entity_trust",
+              "human_orientation"
+            ]
+          }
         }
       },
       "$comment": "Invariant enforced in code (not expressible in plain JSON Schema): total_findings == critical + high + medium."
@@ -164,7 +195,7 @@
         },
         "pages": {
           "type": "array",
-          "description": "Per-page acquisition outcome for multi-page audits.",
+          "description": "Pages that did not load normally, meaning skipped, blocked or failed, each with its reason. Empty when every page loaded; every audited URL is always listed in pages_checked.",
           "items": {
             "type": "object",
             "required": [
@@ -217,7 +248,8 @@
           "type": "boolean"
         },
         "external_lookup": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether any third-party corroboration lookup contributed to this report. Always false: none is implemented, and no flag can enable one. Disclosed so a consumer knows every piece of evidence here was observed on the audited pages themselves."
         },
         "checks_evaluated": {
           "type": "integer",
@@ -396,6 +428,10 @@
               "validation": {
                 "type": "string",
                 "description": "How to confirm the fix worked."
+              },
+              "target": {
+                "type": "string",
+                "description": "Where to make the change, in words (e.g. \"the <title> element in <head>\"). Complements findings[].selector, which names the exact element only when one exists."
               }
             }
           }
@@ -448,6 +484,86 @@
           },
           "validation": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "description": "A prioritized checklist: the same findings ordered by points recoverable, each saying what to do and what it is worth. Where to make the change, how to confirm it and why it matters live once, on the finding named by finding_id. findings[] stays ordered by severity so F-001… are stable between runs, which is why it cannot also carry this ordering.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "rank",
+          "finding_id",
+          "do"
+        ],
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "finding_id": {
+            "type": "string",
+            "pattern": "^F-\\d{3,}$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium"
+            ]
+          },
+          "score_gain": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "do": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "not_checked": {
+      "type": "array",
+      "description": "Categories whose verdict rests on a minority of the evidence, and why. A short findings list cannot tell 'nothing is wrong' from 'we could not look'; both are silence and only one is good news.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "category",
+          "coverage"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "ai_discoverability",
+              "ai_comprehension",
+              "entity_trust",
+              "human_orientation"
+            ]
+          },
+          "coverage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

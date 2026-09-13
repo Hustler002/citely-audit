@@ -1,7 +1,7 @@
-"""Phase 5 — the parity analyzers (AI Comprehension + Human Orientation), and i18n gating.
+"""The parity analyzers (AI Comprehension and Human Orientation), and i18n gating.
 
-With these two, all 24 checks are implemented, so this module also proves the full four-category
-score can be produced end-to-end for the first time.
+Between them these two complete the 24-check registry, so this module also proves the full
+four-category score can be produced end to end.
 """
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def test_emits_six_checks(module, raw_registry):
 
 
 def test_all_24_checks_are_now_implemented(registry, raw_registry):
-    """Phase 5 completes the registry: every declared check has an analyzer that emits it."""
+    """The registry is fully covered: every declared check has an analyzer that emits it."""
     art = artifact_for("<html lang='en'><body><p>x</p></body></html>")
     emitted = set()
     for module in (CRE, ENT, QD, ENG):
@@ -379,7 +379,7 @@ def test_broken_site_scores_below_healthy(registry, raw_registry):
 
 
 def test_non_english_site_is_not_unfairly_penalised(registry, raw_registry):
-    """The rubric's generalization criterion, measured: a good German site must score respectably,
+    """Generalization, measured rather than asserted: a good German site must score respectably,
     with the shortfall showing up as reduced COVERAGE rather than as failures."""
     config = S.load_config()
     cats, overall, cov = _score_all(fixture_html("non_english_page.html"), registry, config,
