@@ -1599,3 +1599,35 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   The user chose to save the run as it is and document all three rather than fix them.
   `sample-report/README.md` gained the row, a paragraph and two limitation bullets.
   No code changed. All six sample reports pass the schema and the required floor.
+- 2026-09-13 — **README rewritten for first-time users; six SKILL.md files corrected against the
+  code.** Documentation only: no code, config, schema or test changed.
+  **README** now covers the problem, the 24 checks by category, execution flow and marketplace
+  composition (two Mermaid diagrams), requirements, installation from an extracted ZIP, usage, every
+  report field and check state in plain language, scoring, safety, design limitations (known defects
+  deliberately left to `sample-report/README.md`, per user), configuration, testing and layout. No
+  reference to internal notes. Every command was run: offline audit (99), `--ci` exits 0 and 1,
+  standalone skills, both validator loops, `pytest -m slow` collection (4 of 1168).
+  **Two facts found by running rather than assuming.** Windows PowerShell 5.1 `>` writes the report
+  as UTF-16 (bytes FF FE), which a UTF-8 JSON reader rejects; `cmd /c "... > report.json"` writes valid
+  UTF-8, so the README documents that. A robots-blocked audit has 0 findings, so `--ci` exits 0; the
+  README tells CI users to check `partial` and `headline_reliable` too.
+  **SKILL.md drift corrected (user-approved):** the orchestrator's said it ran three sub-skills with
+  `--config scoring-config.json` and emitted a single finding when robots blocked the audit (code runs
+  four with `checks.json` and emits none); two analyzers said they output "partial findings" (they
+  print check states); four named config sections that do not exist (`crawl_render_extraction` and
+  similar); the entity skill still described a type allowlist; the advisor claimed `--config` was used
+  (help text says unused) and that it ranks corrective actions (the orchestrator does). The manifest
+  was checked and needed no change.
+  **Found, NOT changed (for the user to decide):** an unreachable robots.txt sets
+  `blocked_before_fetch`, which `_partial_reason` checks first, so the report says
+  `partial_reason: "blocked"` while `report-schema.json` describes that case as `fetch_failed`;
+  reproduced through the real `build_artifact` and `audit`.
+  Verified: Mermaid parsed and rendered by mermaid 11.4.1 and byte-identical in the README; every README
+  link target and anchor resolves; compliance tests 49 passed; all six skills valid.
+  **Follow-up the same day (user-approved):** `references/severity-rubric.md` corrected in two places
+  (the orchestrator passes only `config/checks.json` via `--config`; a robots block of the audit agent
+  emits no finding, while an AI crawler disallowed by robots.txt is the critical case) and the
+  `robots._note` in `scoring-config.json` corrected to match. The README's Limitations section and its
+  table-of-contents entry, and the settings table in its Configuration section, were removed at the
+  user's request. Verified: `scoring-config.json` parses; compliance, scoring, schema and orchestrator
+  tests 160 passed; no broken README anchors.

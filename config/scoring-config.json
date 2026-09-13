@@ -64,7 +64,7 @@
     "_html_content_types_note": "Page content is restricted to text/html. Without enforcement a PDF, JSON API or image would be fetched and parsed as HTML, producing garbage findings on unseen sites."
   },
   "robots": {
-    "_note": "Two DISTINCT robots concerns, deliberately separated. (1) `audit_user_agent_gate`: may CitelyAuditBot fetch at all? Operational only — if disallowed the orchestrator stops, emits one critical finding, and sets partial_reason 'blocked'. Never scored, because nobody blocklists an unknown auditor UA. (2) `ai_crawlers`: may the assistants' crawlers fetch? THIS is the scored signal (check access.ai_crawlers_allowed) — a site can allow us and still be invisible to ChatGPT.",
+    "_note": "Two DISTINCT robots concerns, deliberately separated. (1) `audit_user_agent_gate`: may CitelyAuditBot fetch at all? Operational only — if disallowed the orchestrator fetches nothing, records the block in diagnostics.errors, resolves every check to `unknown` (no finding is emitted), and sets partial_reason 'blocked'. Never scored, because nobody blocklists an unknown auditor UA. (2) `ai_crawlers`: may the assistants' crawlers fetch? THIS is the scored signal (check access.ai_crawlers_allowed) — a site can allow us and still be invisible to ChatGPT.",
     "ai_crawlers": [
       {
         "token": "GPTBot",

@@ -3,8 +3,8 @@
 The human-readable source of truth for how the four analysis skills judge severity, so that skills
 written to be independently runnable still agree. Machine-readable thresholds live in
 [`config/checks.json`](../../../config/checks.json) (per check) and
-[`config/scoring-config.json`](../../../config/scoring-config.json) (the model itself); the
-orchestrator passes both to each sub-skill via `--config`.
+[`config/scoring-config.json`](../../../config/scoring-config.json) (the model itself). The
+orchestrator passes `config/checks.json` to each analysis skill via `--config`.
 
 ## Severity tiers (strict 3-tier — there is no `low`)
 
@@ -71,8 +71,10 @@ as a tie-break, so the ordering reflects what a fix is worth rather than how ala
 ## Per-mechanic severity guidance
 
 ### crawl-ingestion (mechanic 1)
-- `critical`: robots blocks the audit user agent on root; root returns non-2xx; a client-rendered
-  shell with no server-rendered facts.
+- `critical`: `robots.txt` disallows an AI assistant's crawler; the homepage returns non-2xx; a
+  client-rendered shell with no server-rendered facts.
+- If `robots.txt` blocks the audit's own user agent, nothing is fetched and no finding is emitted:
+  every check resolves to `unknown` and the report is marked `partial` with reason `blocked`.
 - `high`: key facts only in images or canvas with no text or alt equivalent.
 - `medium`: partial hydration; semantic-HTML gaps.
 
