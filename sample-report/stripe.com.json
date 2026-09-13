@@ -43,26 +43,7 @@
       "https://stripe.com/in",
       "https://stripe.com/in/pricing"
     ],
-    "pages": [
-      {
-        "url": "https://stripe.com/",
-        "status": "ok",
-        "http_status": 200,
-        "reason": null
-      },
-      {
-        "url": "https://stripe.com/in",
-        "status": "ok",
-        "http_status": 200,
-        "reason": null
-      },
-      {
-        "url": "https://stripe.com/in/pricing",
-        "status": "ok",
-        "http_status": 200,
-        "reason": null
-      }
-    ],
+    "pages": [],
     "language_detected": "en-in",
     "language_supported": true,
     "user_agent": "CitelyAuditBot/0.1",
@@ -141,24 +122,16 @@
       "finding_id": "F-001",
       "title": "Heading structure has gaps",
       "severity": "medium",
-      "category": "ai_comprehension",
-      "why_it_matters": "Headings define the document outline summarizers use to decide which sections survive condensation.",
-      "do": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4).",
-      "where": "the heading elements in <body>, in document order",
-      "confirm": "List the headings in order and confirm there is exactly one `<h1>` and no level is skipped. Any outline tool or `document.querySelectorAll('h1,h2,h3,h4')` in the console will show the sequence.",
-      "score_gain": 1.6
+      "score_gain": 1.6,
+      "do": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4)."
     },
     {
       "rank": 2,
       "finding_id": "F-002",
       "title": "Some facts are locked inside images",
       "severity": "medium",
-      "category": "ai_discoverability",
-      "why_it_matters": "Text baked into images, SVG or canvas cannot be parsed into embeddings, so those facts are unavailable for citation even though a human can read them.",
-      "do": "Repeat any facts shown inside images as real text, or add alt text carrying the same numbers and claims.",
-      "where": "each <img> carrying a figure, and the text around it",
-      "confirm": "Run `curl -sS https://stripe.com/in | grep -F \"<figcaption\"` and confirm the numbers shown in the image appear as text. Copy the page into a plain-text editor: any fact that disappears is still invisible to an answer engine.",
-      "score_gain": 1.2
+      "score_gain": 1.2,
+      "do": "Repeat any facts shown inside images as real text, or add alt text carrying the same numbers and claims."
     }
   ],
   "not_checked": [],

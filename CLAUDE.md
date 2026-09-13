@@ -349,7 +349,7 @@ PowerShell terminal needs none of this.**
 
 ## Current status: ALL TEN PHASES COMPLETE — **compliance signed off mechanically**
 
-**1142 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**1144 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -786,7 +786,7 @@ python tests/run_precision_recall.py                                            
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 1142 passed, 0 skipped
+pytest -q                                                                                  # 1144 passed, 0 skipped
 for s in skills/*/; do agentskills validate "$s"; done                                     # all six skills, pinned in the dev extra
 ```
 
@@ -1533,3 +1533,24 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   owning the decode loop, which is out of scope. Pre-existing for gzip.
   Verified: 1142 tests, 0 failed; corpus recall and precision still 100% with every score unchanged;
   all six skills pass the reference validator.
+- 2026-09-13 — **Report made more compact by removing duplication, not substance.**
+  Measured before changing anything, across all five sample reports: every descriptive field in
+  every `next_actions` entry (title, severity, category, why it matters, what to do, where, how to
+  confirm, score gain) was an exact copy of the linked finding; only `rank` was new, and the list
+  was 13 to 25 percent of each report. Every `diagnostics.pages` entry was `status: ok` and repeated
+  `pages_checked` URL for URL. Nothing in code or tests read `diagnostics.pages`.
+  **Changed, with the user's approval:** `next_actions` is now a checklist of rank, finding_id,
+  title, severity, score_gain and do; where, how to confirm and why it matters live once, on the
+  finding. `diagnostics.pages` lists only pages that did not load normally, and `pages_checked`
+  still names every audited URL. Schema descriptions and the README sentence updated to match.
+  **Kept deliberately:** `suggested_action.priority`, required by the brief though it always equals
+  severity; `headline_caveat: null`; empty arrays for a stable shape; and the long threshold lists
+  on two entity checks, which are the real criteria.
+  **Sample reports reshaped, not re-run,** because live sites drift between runs. The real
+  `next_actions` function was applied to each saved report's own findings, and ranking order was
+  asserted unchanged. Everything outside the two reshaped fields is byte-identical to before, by
+  hash, in all six reports. The sample-report README sentence calling them unedited now says so.
+  Lines per report fell 7 to 13 percent, for example spacejam 690 to 635 and berkshirehathaway
+  676 to 601. No score, check state, finding or piece of evidence changed.
+  Verified: 1144 tests, 0 failed; 4 of 4 mutations caught; corpus recall and precision 100%; all six
+  skills valid; all six reports pass the schema and the required floor.

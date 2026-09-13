@@ -85,11 +85,13 @@ def overall_verdict(score, coverage, registry_categories: dict) -> tuple:
 
 
 def next_actions(findings: list, limit: int | None = None) -> list:
-    """The findings again, ordered by what fixing them is worth.
+    """The findings as a prioritized checklist, ordered by what fixing them is worth.
 
     `findings[]` is deliberately ordered by severity so `F-001…` stay stable between runs, which
-    means it cannot ALSO be ordered by return on effort. This is that second ordering, kept thin —
-    it carries ids and the four things a non-expert needs, never a second copy of the evidence.
+    means it cannot ALSO be ordered by return on effort. This is that second ordering, and it is a
+    checklist rather than a copy: each entry says what to do and what it is worth, and `finding_id`
+    leads to the rest. Where to make the change, how to confirm it and why it matters live once, on
+    the finding, so the two lists can never disagree.
 
     Ranked by `points_recoverable`, with severity as the tie-break so two equal-value
     fixes still present the more serious one first, and the finding id last so the order is total
@@ -112,12 +114,8 @@ def next_actions(findings: list, limit: int | None = None) -> list:
             "finding_id": finding.get("id"),
             "title": finding.get("title"),
             "severity": finding.get("severity"),
-            "category": finding.get("category"),
-            "why_it_matters": finding.get("impact"),
-            "do": action.get("summary"),
-            "where": action.get("target"),
-            "confirm": action.get("validation"),
             "score_gain": finding.get("points_recoverable"),
+            "do": action.get("summary"),
         })
     return actions
 

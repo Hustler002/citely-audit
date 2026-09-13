@@ -235,6 +235,25 @@ def test_unreachable_host_still_produces_a_valid_report(config):
     assert report["diagnostics"]["errors"]
 
 
+def test_the_page_list_names_only_pages_that_did_not_load(healthy_report, local_config):
+    """Loaded pages are already in pages_checked; the page list exists to surface exceptions.
+
+    An entry per successful page used to restate every audited URL with status "ok", which buried
+    the one line a reader needs when a page was blocked or failed.
+    """
+    diagnostics = healthy_report["diagnostics"]
+    assert diagnostics["pages_checked"], "every audited URL must still be listed"
+    assert diagnostics["pages"] == []
+
+    with fixture_server.running() as base:
+        blocked = run_audit.audit(f"{base}/consent-wall", None, local_config, force_tier="heuristic")
+    pages = blocked["diagnostics"]["pages"]
+    assert pages, "a blocked page must never be dropped from the page list"
+    assert all(p["status"] != "ok" for p in pages), pages
+    assert {p["url"] for p in pages} <= set(blocked["diagnostics"]["pages_checked"])
+    assert any(p["status"] == "blocked" and p["reason"] == "consent_wall" for p in pages), pages
+
+
 def test_unknown_check_ids_from_an_analyzer_are_ignored(config):
     registry = S.load_registry()
     errors = []

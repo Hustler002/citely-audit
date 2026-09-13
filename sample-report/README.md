@@ -1,8 +1,9 @@
 # Sample reports
 
 Five audits of real, public websites, chosen to span very different shapes rather than to produce
-particular scores. Each `<site>.json` is the unedited report the entrypoint wrote to stdout; each
-`<site>.stderr.txt` is the log it wrote to stderr during the same run.
+particular scores. Each `<site>.json` is the report the entrypoint wrote to stdout, reshaped to the
+current report layout without altering any score, finding or evidence; each `<site>.stderr.txt` is
+the log it wrote to stderr during the same run.
 
 Reproduce any of them with:
 

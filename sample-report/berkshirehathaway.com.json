@@ -45,38 +45,7 @@
       "https://www.berkshirehathaway.com/sharehold.html",
       "https://www.berkshirehathaway.com/disclaimer.html"
     ],
-    "pages": [
-      {
-        "url": "https://www.berkshirehathaway.com/",
-        "status": "ok",
-        "http_status": 200,
-        "reason": null
-      },
-      {
-        "url": "https://www.berkshirehathaway.com/message.html",
-        "status": "ok",
-        "http_status": 200,
-        "reason": null
-      },
-      {
-        "url": "https://www.berkshirehathaway.com/reports.html",
-        "status": "ok",
-        "http_status": 200,
-        "reason": null
-      },
-      {
-        "url": "https://www.berkshirehathaway.com/sharehold.html",
-        "status": "ok",
-        "http_status": 200,
-        "reason": null
-      },
-      {
-        "url": "https://www.berkshirehathaway.com/disclaimer.html",
-        "status": "ok",
-        "http_status": 200,
-        "reason": null
-      }
-    ],
+    "pages": [],
     "language_detected": null,
     "language_supported": false,
     "user_agent": "CitelyAuditBot/0.1",
@@ -543,132 +512,88 @@
       "finding_id": "F-001",
       "title": "No organization or person entity declared",
       "severity": "critical",
-      "category": "entity_trust",
-      "why_it_matters": "This is the anchor that tells an AI who the page is about. Without it the brand has no declared identity to attach facts to.",
-      "do": "Add a JSON-LD Organization (or Person) entry that names who this site is about.",
-      "where": "the Organization node in your JSON-LD",
-      "confirm": "Run the Rich Results Test and confirm the detected entity's name matches the brand name a visitor sees in your header. A mismatch is worse than no markup: it tells the machine you are a different organisation.",
-      "score_gain": 6.0
+      "score_gain": 6.0,
+      "do": "Add a JSON-LD Organization (or Person) entry that names who this site is about."
     },
     {
       "rank": 2,
       "finding_id": "F-003",
       "title": "No heading in the first viewport",
       "severity": "critical",
-      "category": "human_orientation",
-      "why_it_matters": "A visitor arriving from an AI answer has seconds to confirm they landed in the right place. No heading means no confirmation.",
-      "do": "Put a clear headline at the top of the page so arriving visitors immediately see what it is.",
-      "where": "the first elements inside <main>",
-      "confirm": "Load the page at 1280x800 and confirm a real heading is visible without scrolling. A visitor arriving from an AI citation decides in that first screen whether they reached the right place.",
-      "score_gain": 6.0
+      "score_gain": 6.0,
+      "do": "Put a clear headline at the top of the page so arriving visitors immediately see what it is."
     },
     {
       "rank": 3,
       "finding_id": "F-002",
       "title": "No structured data on the page",
       "severity": "critical",
-      "category": "entity_trust",
-      "why_it_matters": "Without structured data an AI must infer identity from prose, which is where mistaken-identity and hallucination begin.",
-      "do": "Add a JSON-LD block describing this page. Open Graph tags are not a substitute: they drive social previews and carry no schema.org type, so a machine still cannot tell what kind of thing this page is about.",
-      "where": "a JSON-LD script block in <head>",
-      "confirm": "Paste the URL into Google's Rich Results Test or schema.org's validator and confirm an Organization is detected with no errors.",
-      "score_gain": 5.5
+      "score_gain": 5.5,
+      "do": "Add a JSON-LD block describing this page. Open Graph tags are not a substitute: they drive social previews and carry no schema.org type, so a machine still cannot tell what kind of thing this page is about."
     },
     {
       "rank": 4,
       "finding_id": "F-004",
       "title": "Your identity is not linked to anything else",
       "severity": "high",
-      "category": "entity_trust",
-      "why_it_matters": "sameAs links let an AI corroborate your identity across the web instead of guessing between similarly named businesses.",
-      "do": "Add sameAs links from your Organization entry to the profiles and listings you already link to, such as your Google Business, Facebook or LinkedIn page. If you have no structured data yet, rel=\"me\" on those links is a valid alternative.",
-      "where": "the sameAs array on your Organization node",
-      "confirm": "Confirm every URL in `sameAs` loads and is a profile you control. A dead or wrong link weakens corroboration instead of strengthening it.",
-      "score_gain": 5.0
+      "score_gain": 5.0,
+      "do": "Add sameAs links from your Organization entry to the profiles and listings you already link to, such as your Google Business, Facebook or LinkedIn page. If you have no structured data yet, rel=\"me\" on those links is a valid alternative."
     },
     {
       "rank": 5,
       "finding_id": "F-005",
       "title": "Heading structure is inconsistent",
       "severity": "medium",
-      "category": "ai_comprehension",
-      "why_it_matters": "Headings define the document outline summarizers use to decide which sections survive condensation.",
-      "do": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4).",
-      "where": "the heading elements in <body>, in document order",
-      "confirm": "List the headings in order and confirm there is exactly one `<h1>` and no level is skipped. Any outline tool or `document.querySelectorAll('h1,h2,h3,h4')` in the console will show the sequence.",
-      "score_gain": 3.2
+      "score_gain": 3.2,
+      "do": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4)."
     },
     {
       "rank": 6,
       "finding_id": "F-006",
       "title": "Meta description is missing or the wrong length",
       "severity": "medium",
-      "category": "ai_comprehension",
-      "why_it_matters": "Provides a ready-made summary that answer engines frequently reuse verbatim.",
-      "do": "Add a meta description of roughly 50-160 characters summarising the page in one sentence an answer engine could reuse verbatim.",
-      "where": "the description meta tag in <head>",
-      "confirm": "View source and confirm a single `<meta name=\"description\">` of 50 to 160 characters. Paste the URL into a link-preview tool and confirm the description shown is yours, not text the platform guessed.",
-      "score_gain": 3.0
+      "score_gain": 3.0,
+      "do": "Add a meta description of roughly 50-160 characters summarising the page in one sentence an answer engine could reuse verbatim."
     },
     {
       "rank": 7,
       "finding_id": "F-010",
       "title": "Your identity is not anchored to any outside record",
       "severity": "medium",
-      "category": "entity_trust",
-      "why_it_matters": "Corroboration needs a record the brand does not control. Links only to your own accounts leave an AI unable to tell you apart from a similarly named business.",
-      "do": "Link to at least one record somebody else maintains. A Google Business Profile, a Yelp or industry-directory listing, or a companies-registry entry all work; Wikidata or Wikipedia are the strongest but are not required.",
-      "where": "the sameAs array on your Organization node",
-      "confirm": "Confirm at least one `sameAs` target is a record you do not publish yourself — a Google Business Profile, an industry directory, a companies registry or a review platform. Links only to your own accounts cannot settle which business you are.",
-      "score_gain": 3.0
+      "score_gain": 3.0,
+      "do": "Link to at least one record somebody else maintains. A Google Business Profile, a Yelp or industry-directory listing, or a companies-registry entry all work; Wikidata or Wikipedia are the strongest but are not required."
     },
     {
       "rank": 8,
       "finding_id": "F-009",
       "title": "Open Graph identity tags missing",
       "severity": "medium",
-      "category": "entity_trust",
-      "why_it_matters": "Open Graph is a widely consumed secondary identity signal and a fallback when JSON-LD is absent or malformed.",
-      "do": "Add the core Open Graph tags (og:title, og:type, og:url) to the page head.",
-      "where": "the Open Graph meta tags in <head>",
-      "confirm": "Paste the URL into any link-preview debugger and confirm the site name and title shown are the ones you intend.",
-      "score_gain": 2.5
+      "score_gain": 2.5,
+      "do": "Add the core Open Graph tags (og:title, og:type, og:url) to the page head."
     },
     {
       "rank": 9,
       "finding_id": "F-011",
       "title": "Mobile viewport is not declared",
       "severity": "medium",
-      "category": "human_orientation",
-      "why_it_matters": "Most AI-referred traffic is mobile. Without a viewport declaration the page renders unusably small.",
-      "do": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives.",
-      "where": "the viewport meta tag in <head>",
-      "confirm": "Open the page on a phone, or in device emulation, and confirm the text is readable without pinch-zooming.",
-      "score_gain": 2.5
+      "score_gain": 2.5,
+      "do": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives."
     },
     {
       "rank": 10,
       "finding_id": "F-007",
       "title": "Semantic HTML landmarks are missing",
       "severity": "medium",
-      "category": "ai_discoverability",
-      "why_it_matters": "Semantic structure tells extractors which text is primary content versus navigation and boilerplate.",
-      "do": "Wrap the primary content in a <main> or <article> element, so extractors can tell content from navigation and boilerplate.",
-      "where": "the page's top-level layout wrappers",
-      "confirm": "View source and confirm exactly one `<main>` exists and your primary content sits inside it. Extraction tools use `<main>` to separate content from chrome.",
-      "score_gain": 2.0
+      "score_gain": 2.0,
+      "do": "Wrap the primary content in a <main> or <article> element, so extractors can tell content from navigation and boilerplate."
     },
     {
       "rank": 11,
       "finding_id": "F-008",
       "title": "Your name is stated, but nothing confirms it",
       "severity": "medium",
-      "category": "entity_trust",
-      "why_it_matters": "Contradictory names across blocks actively teach an AI the wrong association and are worse than no data at all.",
-      "do": "State one exact spelling of your name in your JSON-LD entry, in og:site_name and in the page title, so the three agree.",
-      "where": "the <title>, the og:site_name tag and the JSON-LD name — all three",
-      "confirm": "Compare the `name` in your JSON-LD, the `og:site_name`, and the brand shown in your header. A tagline appended after a separator is fine; a genuinely different name is not.",
-      "score_gain": 1.5
+      "score_gain": 1.5,
+      "do": "State one exact spelling of your name in your JSON-LD entry, in og:site_name and in the page title, so the three agree."
     }
   ],
   "not_checked": [],

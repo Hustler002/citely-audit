@@ -121,8 +121,8 @@ The pins are what make the recorded scores reproducible, so install 3.12 rather 
 Written to be acted on by someone who is not an SEO engineer, at three depths:
 
 1. `summary.verdict` and `summary.category_verdicts` — one plain sentence each, no jargon.
-2. `next_actions[]` — the same findings ordered by the score each fix recovers, each saying what to
-   do, where to do it, and how to confirm it worked.
+2. `next_actions[]` — a checklist of the same findings ordered by the score each fix recovers, each
+   saying what to do and what it is worth; its `finding_id` leads to where and how to confirm.
 3. `findings[]` — the measurement, threshold, selector and confidence behind every verdict. Present,
    but never the headline.
 

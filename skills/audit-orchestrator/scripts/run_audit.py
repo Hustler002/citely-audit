@@ -615,9 +615,13 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
             "render_nav_state": rendered.get("nav_state"),
             "render_wait_strategy": rendered.get("wait_strategy"),
             "pages_checked": [p.get("url") for p in pages],
+            # Only pages that did NOT load normally. Every audited URL is already in pages_checked,
+            # so an entry per successful page only restated it with status "ok". Listing just the
+            # exceptions keeps a skipped, blocked or failed page impossible to miss.
             "pages": [{"url": p.get("url"), "status": p.get("status", "error"),
                        "http_status": (p.get("raw") or {}).get("status"),
-                       "reason": p.get("blocked_kind") or p.get("skip_reason")} for p in pages],
+                       "reason": p.get("blocked_kind") or p.get("skip_reason")}
+                      for p in pages if p.get("status", "error") != "ok"],
             "language_detected": (artifact.get("language") or {}).get("detected"),
             "language_supported": language_supported,
             "user_agent": artifact.get("user_agent", ""),

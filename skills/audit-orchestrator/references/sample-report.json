@@ -41,14 +41,7 @@
     "pages_checked": [
       "file://tests/fixtures/broken_page.html"
     ],
-    "pages": [
-      {
-        "url": "file://tests/fixtures/broken_page.html",
-        "status": "ok",
-        "http_status": 200,
-        "reason": null
-      }
-    ],
+    "pages": [],
     "language_detected": "en",
     "language_supported": true,
     "user_agent": "CitelyAuditBot/0.1",
@@ -119,24 +112,16 @@
       "finding_id": "F-001",
       "title": "Content only appears after JavaScript runs",
       "severity": "critical",
-      "category": "ai_discoverability",
-      "why_it_matters": "Crawlers that do not execute JavaScript see an empty shell. Facts that only appear after hydration are invisible to them, so nothing is quotable or citable.",
-      "do": "Server-render or pre-render the page so its key facts are present in the initial HTML, before any JavaScript runs.",
-      "where": "your rendering setup (server-side rendering or prerendering) — not the markup",
-      "confirm": "Run `curl -sS file://tests/fixtures/broken_page.html | grep -c \"<h1\"` and then search the same output for a sentence of your main copy. If the raw HTML does not already contain the text a reader sees, server-side rendering or prerendering is the fix — no markup change reproduces it.",
-      "score_gain": 6.0
+      "score_gain": 6.0,
+      "do": "Server-render or pre-render the page so its key facts are present in the initial HTML, before any JavaScript runs."
     },
     {
       "rank": 2,
       "finding_id": "F-002",
       "title": "Mobile viewport is not declared",
       "severity": "medium",
-      "category": "human_orientation",
-      "why_it_matters": "Most AI-referred traffic is mobile. Without a viewport declaration the page renders unusably small.",
-      "do": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives.",
-      "where": "the viewport meta tag in <head>",
-      "confirm": "Open the page on a phone, or in device emulation, and confirm the text is readable without pinch-zooming.",
-      "score_gain": 2.5
+      "score_gain": 2.5,
+      "do": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> so the page renders correctly on phones, where most AI-referred traffic arrives."
     }
   ],
   "not_checked": [

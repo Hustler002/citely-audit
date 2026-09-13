@@ -195,7 +195,7 @@
         },
         "pages": {
           "type": "array",
-          "description": "Per-page acquisition outcome for multi-page audits.",
+          "description": "Pages that did not load normally, meaning skipped, blocked or failed, each with its reason. Empty when every page loaded; every audited URL is always listed in pages_checked.",
           "items": {
             "type": "object",
             "required": [
@@ -490,7 +490,7 @@
     },
     "next_actions": {
       "type": "array",
-      "description": "The same findings ordered by points recoverable, answering do / where / confirm / gain. A ranked VIEW, not a second copy — findings[] is ordered by severity so F-001… stay stable between runs, so it cannot also carry the ROI ordering.",
+      "description": "A prioritized checklist: the same findings ordered by points recoverable, each saying what to do and what it is worth. Where to make the change, how to confirm it and why it matters live once, on the finding named by finding_id. findings[] stays ordered by severity so F-001… are stable between runs, which is why it cannot also carry this ordering.",
       "items": {
         "type": "object",
         "additionalProperties": true,
@@ -519,42 +519,15 @@
               "medium"
             ]
           },
-          "category": {
-            "type": "string",
-            "enum": [
-              "ai_discoverability",
-              "ai_comprehension",
-              "entity_trust",
-              "human_orientation"
-            ]
-          },
-          "why_it_matters": {
+          "score_gain": {
             "type": [
-              "string",
+              "number",
               "null"
             ]
           },
           "do": {
             "type": [
               "string",
-              "null"
-            ]
-          },
-          "where": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "confirm": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "score_gain": {
-            "type": [
-              "number",
               "null"
             ]
           }

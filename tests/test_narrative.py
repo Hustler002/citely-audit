@@ -204,12 +204,37 @@ def test_severity_breaks_a_tie_before_the_id_does():
 
 
 def test_every_action_answers_what_where_and_how_to_confirm():
+    """The checklist says what to do; the finding it names says where and how to confirm.
+
+    Checked through `finding_id`, so the guarantee still holds end to end now that where and
+    confirm live once, on the finding, instead of being copied into every action.
+    """
     report = run_audit("advisor_faq_unmarked.html")
+    findings = {f["id"]: f for f in report["findings"]}
     assert report["next_actions"]
     for action in report["next_actions"]:
         assert action["do"], f"{action['finding_id']} does not say what to do"
-        assert action["where"], f"{action['finding_id']} does not say where"
-        assert action["confirm"], f"{action['finding_id']} does not say how to confirm"
+        suggested = findings[action["finding_id"]]["suggested_action"]
+        assert suggested.get("target"), f"{action['finding_id']} does not say where"
+        assert suggested.get("validation"), f"{action['finding_id']} does not say how to confirm"
+
+
+def test_next_actions_is_a_checklist_not_a_copy_of_the_findings():
+    """Each action carries what to do and what it is worth, and nothing else already on the finding.
+
+    Every descriptive field in every action used to be an exact copy of the linked finding, so the
+    same where, confirm and why-it-matters text appeared twice in every report.
+    """
+    report = run_audit("advisor_faq_unmarked.html")
+    findings = {f["id"]: f for f in report["findings"]}
+    assert report["next_actions"]
+    for action in report["next_actions"]:
+        assert set(action) == {"rank", "finding_id", "title", "severity", "score_gain", "do"}, action
+        finding = findings[action["finding_id"]]
+        assert action["title"] == finding["title"]
+        assert action["severity"] == finding["severity"]
+        assert action["score_gain"] == finding["points_recoverable"]
+        assert action["do"] == finding["suggested_action"]["summary"]
 
 
 # =================================================================================================
@@ -278,8 +303,8 @@ def test_missing_category_config_still_produces_a_sentence():
 
 def test_next_actions_ignores_junk_entries():
     assert N.next_actions(["nope", None, {"id": "F-001"}]) == [
-        {"rank": 1, "finding_id": "F-001", "title": None, "severity": None, "category": None,
-         "why_it_matters": None, "do": None, "where": None, "confirm": None, "score_gain": None}]
+        {"rank": 1, "finding_id": "F-001", "title": None, "severity": None, "score_gain": None,
+         "do": None}]
 
 
 def test_the_schema_declares_every_field_the_report_emits():
