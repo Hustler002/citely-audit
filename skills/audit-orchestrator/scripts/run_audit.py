@@ -604,7 +604,10 @@ def audit(url: str | None, html_file: str | None, config: dict, *,
         "diagnostics": {
             "total_ms": int((time.monotonic() - started) * 1000),
             "crawl_ms": (artifact.get("timing") or {}).get("total_ms", 0),
-            "playwright_available": bool(rendered.get("available")),
+            # Whether a browser was FOUND, not whether the render succeeded. Those are
+            # different facts, and merging them reported "no browser" on a machine that had
+            # just run one — sending a reader to reinstall something that was never missing.
+            "playwright_available": bool(rendered.get("browser_available")),
             "render_mode": rendered.get("mode") or render_mod.TIER_B,
             # How the render went, not merely whether it happened. "salvaged" means the navigation
             # milestone timed out and the DOM was harvested anyway, which is a Tier-A result a

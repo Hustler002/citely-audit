@@ -27,6 +27,11 @@ dependencies = [
     "lxml==5.3.0",
     "jsonschema==4.23.0",
     "playwright==1.47.0",
+    # Decodes `Content-Encoding: br`. We advertise only gzip and deflate, but some CDNs answer in
+    # Brotli regardless, and without a decoder such a page cannot be audited at all. urllib3 picks
+    # it up automatically. Pinned EXACTLY: 1.2.0 is the first release whose decompressor accepts an
+    # output limit, and with anything older urllib3 decodes Brotli unbounded, warning only.
+    "Brotli==1.2.0",
 ]
 
 [project.optional-dependencies]

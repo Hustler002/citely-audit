@@ -125,6 +125,7 @@ def _page_entry(candidate, fetch_result, render_result, config) -> dict:
     if render_result is not None:
         entry["rendered"] = {
             "available": render_result.available,
+            "browser_available": render_result.browser_available,
             "mode": render_result.mode,
             "html": render_result.html,
             "render_ms": render_result.render_ms,

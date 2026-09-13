@@ -46,6 +46,12 @@ class RenderResult:
     heuristic_signals: dict = field(default_factory=dict)
     geometry: dict = field(default_factory=dict)
     error: str | None = None
+    # Whether a usable browser was found on this machine, which is NOT the same question as
+    # whether the render succeeded. A render can fail on a page that navigates while it is being
+    # read, and `available` is false in that case even though Chromium ran. Reporting the two as
+    # one number told a reader "no browser available" about a machine that had just used one, and
+    # the obvious response to that is to reinstall a runtime that was never missing.
+    browser_available: bool = False
     # How the render actually went, disclosed rather than hidden behind `available`.
     #   ok          — the navigation milestone fired
     #   busy        — milestone fired, but the page never went quiet (beacons, sockets, polling)
@@ -463,6 +469,7 @@ def render_page(url: str, raw_html: str, config: dict, *,
 
     result = render_with_browser(url, config, deadline=deadline)
     result.heuristic_signals = signals
+    result.browser_available = True        # a browser was found and used, whatever came of it
     if not result.available:
         result.mode = TIER_B  # render attempted but failed; be honest about what we actually have
     return result

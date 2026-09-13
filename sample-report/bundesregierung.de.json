@@ -1,0 +1,391 @@
+{
+  "site": "www.bundesregierung.de",
+  "audited_at": "2026-09-12T18:44:02Z",
+  "summary": {
+    "total_findings": 4,
+    "critical": 0,
+    "high": 1,
+    "medium": 3,
+    "discoverability_score": 90,
+    "category_scores": {
+      "ai_comprehension": 88.6,
+      "ai_discoverability": 100.0,
+      "entity_trust": 72.0,
+      "human_orientation": 100.0
+    },
+    "score_confidence": 0.941,
+    "coverage": 0.848,
+    "category_coverage": {
+      "ai_comprehension": 0.57,
+      "ai_discoverability": 1.0,
+      "entity_trust": 1.0,
+      "human_orientation": 0.82
+    },
+    "verdict": "Your site is in good shape for AI assistants to find, read and cite.",
+    "headline_reliable": true,
+    "headline_caveat": null,
+    "category_verdicts": {
+      "ai_comprehension": "Your page states its facts clearly enough to be quoted.",
+      "ai_discoverability": "AI assistants can reach your page and read what is on it.",
+      "entity_trust": "Your page gives some sense of who you are, but not enough to tell you apart from a similarly named business.",
+      "human_orientation": "A visitor arriving from an AI answer can immediately tell what you do."
+    }
+  },
+  "diagnostics": {
+    "total_ms": 80171,
+    "crawl_ms": 68296,
+    "playwright_available": true,
+    "render_mode": "playwright",
+    "render_nav_state": "ok",
+    "render_wait_strategy": "load",
+    "pages_checked": [
+      "https://www.bundesregierung.de/",
+      "https://www.bundesregierung.de/breg-en",
+      "https://www.bundesregierung.de/breg-fr",
+      "https://www.bundesregierung.de/breg-de/gebaerdensprache?view=",
+      "https://www.bundesregierung.de/breg-de/leichte-sprache?view="
+    ],
+    "pages": [
+      {
+        "url": "https://www.bundesregierung.de/",
+        "status": "ok",
+        "http_status": 200,
+        "reason": null
+      },
+      {
+        "url": "https://www.bundesregierung.de/breg-en",
+        "status": "ok",
+        "http_status": 200,
+        "reason": null
+      },
+      {
+        "url": "https://www.bundesregierung.de/breg-fr",
+        "status": "ok",
+        "http_status": 200,
+        "reason": null
+      },
+      {
+        "url": "https://www.bundesregierung.de/breg-de/gebaerdensprache?view=",
+        "status": "ok",
+        "http_status": 200,
+        "reason": null
+      },
+      {
+        "url": "https://www.bundesregierung.de/breg-de/leichte-sprache?view=",
+        "status": "ok",
+        "http_status": 200,
+        "reason": null
+      }
+    ],
+    "language_detected": "de",
+    "language_supported": false,
+    "user_agent": "CitelyAuditBot/0.1",
+    "robots_checked": true,
+    "external_lookup": false,
+    "advisor": {
+      "language_gated": [
+        "R:facts_in_prose",
+        "R:undated_claims"
+      ]
+    },
+    "checks_evaluated": 21,
+    "checks_unknown": 3,
+    "errors": []
+  },
+  "partial": false,
+  "partial_reason": null,
+  "findings": [
+    {
+      "title": "Identity is declared only weakly",
+      "severity": "high",
+      "category": "entity_trust",
+      "check_id": "entity.organization_declared",
+      "confidence": "verified",
+      "plain_summary": "Your page names who it is, but not in a form machines can corroborate.",
+      "signal": "A schema.org entity of an accepted identity type in the structured data graph",
+      "measurement": "open_graph:Die Bundesregierung informiert | Startseite",
+      "threshold": {
+        "accepted_types": [
+          "Organization",
+          "Person",
+          "LocalBusiness",
+          "Corporation",
+          "NGO",
+          "NewsMediaOrganization",
+          "EducationalOrganization",
+          "GovernmentOrganization",
+          "SportsOrganization",
+          "Airline",
+          "Consortium",
+          "Cooperative",
+          "MedicalOrganization",
+          "PerformingGroup",
+          "Project",
+          "Brand",
+          "Store",
+          "Restaurant",
+          "Dentist",
+          "Physician",
+          "LegalService",
+          "HomeAndConstructionBusiness",
+          "FoodEstablishment",
+          "HealthAndBeautyBusiness",
+          "AutomotiveBusiness",
+          "FinancialService",
+          "ProfessionalService",
+          "EntertainmentBusiness",
+          "LodgingBusiness",
+          "TravelAgency"
+        ],
+        "identity_properties": [
+          "address",
+          "telephone",
+          "email",
+          "sameAs",
+          "logo",
+          "founder",
+          "vatID",
+          "taxID",
+          "openingHours",
+          "openingHoursSpecification",
+          "geo",
+          "contactPoint",
+          "hasMap",
+          "aggregateRating",
+          "duns",
+          "leiCode",
+          "naics",
+          "isicV4"
+        ],
+        "min_identity_properties": 2
+      },
+      "evidence": "Identity declared only via Open Graph (\"Die Bundesregierung informiert | Startseite\"). This names the site but carries no schema.org type and no sameAs links, so an AI cannot corroborate it against an authoritative source.",
+      "selector": "meta[property=\"og:site_name\"]",
+      "page_url": "https://www.bundesregierung.de/",
+      "impact": "This is the anchor that tells an AI who the page is about. Without it the brand has no declared identity to attach facts to.",
+      "points_recoverable": 3.0,
+      "suggested_action": {
+        "summary": "Add a JSON-LD Organization (or Person) entry that names who this site is about.",
+        "priority": "high",
+        "target": "the Organization node in your JSON-LD",
+        "snippet": "<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"Die Bundesregierung informiert | Startseite\",\n  \"url\": \"https://www.bundesregierung.de/breg-de\",\n  \"logo\": \"https://www.bundesregierung.de/resource/image/2451892/16x9/500/281/c987843beaac64cbc8832402c51f6f50/44A0123410DD1B6492FAF7176D4CBEDA/2026-09-09-generaldebatte-bk.webp\",\n  \"description\": \"Aktuelle Informationen, Hintergründe, Livestreams und Service-Angebote: Erfahren Sie hier mehr über die politische Arbeit und Ziele der Bundesregierung.\"\n}\n</script>\n\n<!-- Use a more specific @type if one fits — Dentist, Bakery, LocalBusiness, SoftwareApplication.\n     A specific type carries more meaning than the generic one, and any schema.org subtype counts. -->",
+        "validation": "Run the Rich Results Test and confirm the detected entity's name matches the brand name a visitor sees in your header. A mismatch is worse than no markup: it tells the machine you are a different organisation."
+      },
+      "id": "F-001"
+    },
+    {
+      "title": "Heading structure has gaps",
+      "severity": "medium",
+      "category": "ai_comprehension",
+      "check_id": "content.heading_hierarchy",
+      "confidence": "verified",
+      "plain_summary": "Your headings are mostly sensible but skip levels or repeat the top level.",
+      "signal": "Heading level sequence (h1 to h6) checked for skipped levels and multiple h1s",
+      "measurement": "39 headings, h1_count=2, skips=0",
+      "threshold": {
+        "max_level_skip": 1
+      },
+      "evidence": "Outline issues: 2 h1 elements (expected exactly 1)",
+      "selector": null,
+      "page_url": "https://www.bundesregierung.de/",
+      "impact": "Headings define the document outline summarizers use to decide which sections survive condensation.",
+      "points_recoverable": 1.6,
+      "suggested_action": {
+        "summary": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4).",
+        "priority": "medium",
+        "target": "the heading elements in <body>, in document order",
+        "snippet": "<!-- One h1, then descend one level at a time. Skipping levels breaks the outline. -->\n<h1>Die Bundesregierung informiert | Startseite</h1>\n  <h2>First major section</h2>\n    <h3>Detail within it</h3>\n  <h2>Second major section</h2>",
+        "validation": "List the headings in order and confirm there is exactly one `<h1>` and no level is skipped. Any outline tool or `document.querySelectorAll('h1,h2,h3,h4')` in the console will show the sequence."
+      },
+      "id": "F-002"
+    },
+    {
+      "title": "Your identity is anchored only to your own profiles",
+      "severity": "medium",
+      "category": "entity_trust",
+      "check_id": "entity.sameas_authority",
+      "confidence": "verified",
+      "plain_summary": "You link to accounts you control, which cannot settle which business you are.",
+      "signal": "sameAs targets matched against known authority domains",
+      "measurement": 8,
+      "threshold": {
+        "authority_domains": [
+          "wikidata.org",
+          "wikipedia.org",
+          "dbpedia.org",
+          "viaf.org",
+          "isni.org",
+          "ror.org",
+          "orcid.org",
+          "crunchbase.com",
+          "opencorporates.com",
+          "companieshouse.gov.uk",
+          "sec.gov",
+          "bloomberg.com",
+          "linkedin.com",
+          "g.page",
+          "business.site",
+          "maps.google.com",
+          "yelp.com",
+          "tripadvisor.com",
+          "trustpilot.com",
+          "bbb.org",
+          "glassdoor.com",
+          "indeed.com",
+          "yellowpages.com",
+          "thomasnet.com",
+          "angi.com",
+          "checkatrade.com",
+          "trustedtraders.which.co.uk",
+          "healthgrades.com",
+          "zocdoc.com",
+          "avvo.com",
+          "justia.com",
+          "github.com",
+          "gitlab.com"
+        ],
+        "social_profile_domains": [
+          "facebook.com",
+          "fb.com",
+          "instagram.com",
+          "twitter.com",
+          "x.com",
+          "youtube.com",
+          "tiktok.com",
+          "pinterest.com",
+          "threads.net",
+          "threads.com",
+          "snapchat.com",
+          "reddit.com",
+          "vimeo.com",
+          "flickr.com",
+          "tumblr.com",
+          "medium.com",
+          "substack.com",
+          "bsky.app",
+          "mastodon.social",
+          "weibo.com",
+          "vk.com",
+          "xing.com",
+          "line.me",
+          "t.me",
+          "telegram.me",
+          "whatsapp.com",
+          "wa.me"
+        ],
+        "share_path_markers": [
+          "/sharer",
+          "/share",
+          "/intent/",
+          "/shareartic",
+          "/submit",
+          "/dialog/",
+          "/send",
+          "/post?",
+          "/tweet",
+          "/pin/create"
+        ]
+      },
+      "evidence": "Identity links reach only self-published profiles (https://www.facebook.com/Bundesregierung, https://www.instagram.com/bundesregierung/, https://www.whatsapp.com/channel/0029VaVHioo3gvWaMbY0bz2E). The brand controls both ends, so these cannot settle which organisation this is.",
+      "selector": null,
+      "page_url": "https://www.bundesregierung.de/",
+      "impact": "Corroboration needs a record the brand does not control. Links only to your own accounts leave an AI unable to tell you apart from a similarly named business.",
+      "points_recoverable": 1.5,
+      "suggested_action": {
+        "summary": "Link to at least one record somebody else maintains. A Google Business Profile, a Yelp or industry-directory listing, or a companies-registry entry all work; Wikidata or Wikipedia are the strongest but are not required.",
+        "priority": "medium",
+        "target": "the sameAs array on your Organization node",
+        "snippet": "<!-- Add at least one record somebody else maintains. Any ONE of these anchors your identity;\n     a local business does not need Wikidata, and a directory listing works just as well. -->\n\"sameAs\": [\n{{SAMEAS_LINKS_LEADING}}\n    \"{{AUTHORITY_PROFILE_URL}}\"\n]",
+        "validation": "Confirm at least one `sameAs` target is a record you do not publish yourself — a Google Business Profile, an industry directory, a companies registry or a review platform. Links only to your own accounts cannot settle which business you are.",
+        "placeholders_remaining": [
+          "{{SAMEAS_LINKS_LEADING}}",
+          "{{AUTHORITY_PROFILE_URL}}"
+        ]
+      },
+      "id": "F-003"
+    },
+    {
+      "title": "Your profiles are linked but not declared",
+      "severity": "medium",
+      "category": "entity_trust",
+      "check_id": "entity.sameas_present",
+      "confidence": "verified",
+      "plain_summary": "You link to your own profiles, but not in a way that states they are you.",
+      "signal": "sameAs property on the declared entity",
+      "measurement": 9,
+      "threshold": {
+        "min_links": 1
+      },
+      "evidence": "9 link(s) to this brand's own profiles (https://www.facebook.com/Bundesregierung, https://www.instagram.com/bundesregierung/, https://www.whatsapp.com/channel/0029VaVHioo3gvWaMbY0bz2E), but none declared as sameAs, so an AI must infer the connection rather than read it",
+      "selector": null,
+      "page_url": "https://www.bundesregierung.de/",
+      "impact": "sameAs links let an AI corroborate your identity across the web instead of guessing between similarly named businesses.",
+      "points_recoverable": 2.5,
+      "suggested_action": {
+        "summary": "Add sameAs links from your Organization entry to the profiles and listings you already link to, such as your Google Business, Facebook or LinkedIn page. If you have no structured data yet, rel=\"me\" on those links is a valid alternative.",
+        "priority": "medium",
+        "target": "the sameAs array on your Organization node",
+        "snippet": "<!-- sameAs states \"these profiles are me\". Add it to the Organization you already declare. -->\n<script type=\"application/ld+json\">\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"Die Bundesregierung informiert | Startseite\",\n  \"url\": \"https://www.bundesregierung.de/breg-de\",\n  \"sameAs\": [\n{{SAMEAS_LINKS}}\n  ]\n}\n</script>\n\n<!-- With no structured data yet, rel=\"me\" on the links you already have is a valid alternative: -->\n<a rel=\"me\" href=\"{{PROFILE_URL}}\">Die Bundesregierung informiert | Startseite on {{PLATFORM}}</a>",
+        "validation": "Confirm every URL in `sameAs` loads and is a profile you control. A dead or wrong link weakens corroboration instead of strengthening it.",
+        "placeholders_remaining": [
+          "{{SAMEAS_LINKS}}",
+          "{{PROFILE_URL}}",
+          "{{PLATFORM}}"
+        ]
+      },
+      "id": "F-004"
+    }
+  ],
+  "next_actions": [
+    {
+      "rank": 1,
+      "finding_id": "F-001",
+      "title": "Identity is declared only weakly",
+      "severity": "high",
+      "category": "entity_trust",
+      "why_it_matters": "This is the anchor that tells an AI who the page is about. Without it the brand has no declared identity to attach facts to.",
+      "do": "Add a JSON-LD Organization (or Person) entry that names who this site is about.",
+      "where": "the Organization node in your JSON-LD",
+      "confirm": "Run the Rich Results Test and confirm the detected entity's name matches the brand name a visitor sees in your header. A mismatch is worse than no markup: it tells the machine you are a different organisation.",
+      "score_gain": 3.0
+    },
+    {
+      "rank": 2,
+      "finding_id": "F-004",
+      "title": "Your profiles are linked but not declared",
+      "severity": "medium",
+      "category": "entity_trust",
+      "why_it_matters": "sameAs links let an AI corroborate your identity across the web instead of guessing between similarly named businesses.",
+      "do": "Add sameAs links from your Organization entry to the profiles and listings you already link to, such as your Google Business, Facebook or LinkedIn page. If you have no structured data yet, rel=\"me\" on those links is a valid alternative.",
+      "where": "the sameAs array on your Organization node",
+      "confirm": "Confirm every URL in `sameAs` loads and is a profile you control. A dead or wrong link weakens corroboration instead of strengthening it.",
+      "score_gain": 2.5
+    },
+    {
+      "rank": 3,
+      "finding_id": "F-002",
+      "title": "Heading structure has gaps",
+      "severity": "medium",
+      "category": "ai_comprehension",
+      "why_it_matters": "Headings define the document outline summarizers use to decide which sections survive condensation.",
+      "do": "Use exactly one <h1> and step heading levels one at a time (h1 then h2, never h1 then h4).",
+      "where": "the heading elements in <body>, in document order",
+      "confirm": "List the headings in order and confirm there is exactly one `<h1>` and no level is skipped. Any outline tool or `document.querySelectorAll('h1,h2,h3,h4')` in the console will show the sequence.",
+      "score_gain": 1.6
+    },
+    {
+      "rank": 4,
+      "finding_id": "F-003",
+      "title": "Your identity is anchored only to your own profiles",
+      "severity": "medium",
+      "category": "entity_trust",
+      "why_it_matters": "Corroboration needs a record the brand does not control. Links only to your own accounts leave an AI unable to tell you apart from a similarly named business.",
+      "do": "Link to at least one record somebody else maintains. A Google Business Profile, a Yelp or industry-directory listing, or a companies-registry entry all work; Wikidata or Wikipedia are the strongest but are not required.",
+      "where": "the sameAs array on your Organization node",
+      "confirm": "Confirm at least one `sameAs` target is a record you do not publish yourself — a Google Business Profile, an industry directory, a companies registry or a review platform. Links only to your own accounts cannot settle which business you are.",
+      "score_gain": 1.5
+    }
+  ],
+  "not_checked": [],
+  "recommendations": []
+}

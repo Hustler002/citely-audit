@@ -79,6 +79,50 @@ class UnexpectedContentTypeError(FetchError):
     """Response was not one of the content types the caller asked for."""
 
 
+class UndecodableContentEncodingError(FetchError):
+    """Response arrived in a compression the HTTP stack here cannot undo."""
+
+
+class MalformedContentEncodingError(UndecodableContentEncodingError):
+    """Response declared an encoding its body does not actually contain."""
+
+
+def decodable_encodings() -> frozenset:
+    """Content encodings the installed HTTP stack can actually undo.
+
+    Read from urllib3 rather than hardcoded, because the answer depends on what is installed:
+    `br` appears in this list only when a Brotli package is present. Hardcoding either answer
+    would be wrong on half the machines this runs on.
+    """
+    try:
+        from urllib3.response import HTTPResponse
+        supported = {str(e).lower() for e in HTTPResponse.CONTENT_DECODERS}
+    except Exception:                      # pragma: no cover - urllib3 internals moved
+        supported = {"gzip", "x-gzip", "deflate"}
+    return frozenset(supported | {"identity", ""})
+
+
+def undecodable_encodings(content_encoding: str | None) -> list:
+    """Which of a response's declared encodings we cannot undo, in order.
+
+    We advertise only `gzip, deflate`, so a well-behaved server never sends anything else. Some
+    do anyway — a CDN returning `br` to every client regardless of Accept-Encoding is real and
+    reachable on the open web. `br` is decodable because Brotli is a pinned dependency; this
+    covers whatever remains, and `br` too if Brotli is ever absent. urllib3 passes an encoding it
+    cannot decode straight through WITHOUT raising, so the caller is handed compressed bytes
+    labelled as HTML.
+
+    That failure is silent and it poisons everything downstream: the raw-HTML checks see no
+    landmarks and no images in what is really binary, page selection finds no navigation links,
+    and the report states those absences as fact. Refusing the response instead turns an
+    unreadable page into an honest error, and the scoring model already treats a page it could
+    not read as `unknown` rather than as a failure.
+    """
+    usable = decodable_encodings()
+    declared = [part.strip().lower() for part in (content_encoding or "").split(",")]
+    return [part for part in declared if part not in usable]
+
+
 def deadline_from_config(config: dict, started: float | None = None) -> float:
     """Absolute monotonic deadline derived from `budgets.global_deadline_s`.
 
@@ -448,7 +492,23 @@ def safe_get(url: str, config: dict, *, deadline: float | None = None,
                         f"content-type {declared_type!r} not in {sorted(require_content_types)}"
                     )
 
-                body = read_capped(response, max_bytes, max_decompressed)
+                stuck = undecodable_encodings(response.headers.get("Content-Encoding"))
+                if stuck:
+                    raise UndecodableContentEncodingError(
+                        f"content-encoding {', '.join(stuck)} cannot be decoded here"
+                    )
+
+                try:
+                    body = read_capped(response, max_bytes, max_decompressed)
+                except requests.exceptions.ContentDecodingError as exc:
+                    # A decoder exists but the body is not what the header claims. requests files
+                    # this under RequestException, so without this it was reported as a network
+                    # failure, sending an operator to debug a connection that worked.
+                    declared = (response.headers.get("Content-Encoding") or "").strip()
+                    raise MalformedContentEncodingError(
+                        f"content-encoding {declared} is declared but the body is not valid "
+                        f"{declared} data"
+                    ) from exc
                 result.final_url = redact_url(response.url)
                 result.status = response.status_code
                 result.content_type = response.headers.get("Content-Type")
@@ -467,6 +527,8 @@ def safe_get(url: str, config: dict, *, deadline: float | None = None,
         result.error, result.error_kind = str(exc), "too_large"
     except UnexpectedContentTypeError as exc:
         result.error, result.error_kind = str(exc), "content_type"
+    except UndecodableContentEncodingError as exc:
+        result.error, result.error_kind = str(exc), "content_encoding"
     except requests.exceptions.SSLError as exc:
         # Recorded, never retried over plaintext: silently downgrading would defeat the point.
         result.error, result.error_kind = f"TLS failure: {exc}", "tls"

@@ -567,3 +567,144 @@ def test_no_dead_config_keys(config):
     assert "audit_user_agent_gate" not in config["robots"]
     assert "strategy" not in config["page_selection"]
     assert "default_when_undetected" not in config["language"]
+
+
+# =================================================================================================
+# Content encodings: decode what the stack supports, refuse the rest, never guess
+#
+# We advertise `Accept-Encoding: gzip, deflate`. Some servers answer in Brotli regardless: a CDN
+# returned `br` to this auditor even when asked for `identity`. With no Brotli decoder, urllib3
+# passed the compressed bytes through WITHOUT raising, so they arrived labelled `text/html`. Brotli
+# is now a pinned dependency and urllib3 decodes it. What the stack still cannot undo is refused
+# before the body is read, and a body that claims an encoding it does not contain is refused as
+# malformed. Either refusal leaves the page unread, so its checks resolve to `unknown`.
+# =================================================================================================
+@pytest.mark.parametrize("route,title", [
+    ("/gzipped-page", "Gzipped"),
+    ("/deflate-page", "Deflated"),
+    ("/brotli-page", "Brotli"),
+    ("/layered-gzip-br", "Layered"),   # two encodings applied in order, undone in reverse
+    ("/identity-page", "Identity"),    # explicitly "no encoding at all"
+])
+def test_each_supported_encoding_is_decoded_before_analysis(config, server, route, title):
+    result = SF.safe_get(f"{server}{route}", config)
+    assert result.error_kind is None, result.error
+    body = result.body or b""
+    assert body.startswith(b"<!DOCTYPE html>"), f"analyzers would be handed {body[:12]!r}"
+    assert f"<title>{title}</title>".encode() in body
+
+
+def test_brotli_is_decodable_with_the_pinned_dependency():
+    """The regression for the live failure: `br` was refused because nothing here could undo it."""
+    assert "br" in SF.decodable_encodings()
+    assert SF.undecodable_encodings("br") == []
+
+
+def test_the_pinned_brotli_bounds_what_one_call_can_inflate():
+    """Why the pin is exact.
+
+    urllib3 bounds Brotli output only through `output_buffer_limit`, which arrived in Brotli 1.2.0.
+    With an older release it decodes without a limit and merely warns. The streaming cap would still
+    stop the running total, but not how far a single chunk expands in memory before it is counted.
+
+    The limit is a bound, not an exact size: Brotli rounds it up to its own internal block. So the
+    assertion is that one limited call stays far below the whole payload, while an unlimited call
+    produces all of it at once.
+    """
+    import brotli
+    payload = brotli.compress(b"A" * 1_000_000)
+
+    bounded = brotli.Decompressor()
+    first = bounded.process(payload, output_buffer_limit=4096)
+    assert 0 < len(first) < 100_000, "a limited call must not inflate the whole payload at once"
+    assert not bounded.is_finished(), "the remainder must still be pending, not already produced"
+
+    unbounded = brotli.Decompressor().process(payload)
+    assert len(unbounded) == 1_000_000, "the control: with no limit it all arrives in one call"
+
+
+def test_a_server_that_sends_brotli_unasked_is_now_read(config, server):
+    """The live failure end to end: an unrequested `br` page becomes a readable page."""
+    artifact = A.build_artifact(f"{server}/brotli-page", config, force_tier="heuristic")
+    page = artifact["pages"][0]
+    assert page["status"] == "ok", page.get("skip_reason")
+    assert "<title>Brotli</title>" in page["raw"]["html"]
+
+
+def test_an_unsupported_encoding_is_refused_before_the_body_is_read(config, server):
+    result = SF.safe_get(f"{server}/compress-unrequested", config)
+    assert result.error_kind == "content_encoding"
+    assert "compress" in result.error
+    assert not result.body, "undecodable bytes must never be stored as page HTML"
+
+
+@pytest.mark.parametrize("route,encoding", [
+    ("/brotli-malformed", "br"),
+    ("/gzip-malformed", "gzip"),
+])
+def test_a_malformed_body_is_refused_with_a_clear_diagnostic(config, server, route, encoding):
+    """A body that claims an encoding it does not contain.
+
+    This used to surface as `error_kind="network"` carrying urllib3's message. Safe, since no bytes
+    reached the analyzers, but it blamed the connection for a corrupt payload.
+    """
+    result = SF.safe_get(f"{server}{route}", config)
+    assert result.error_kind == "content_encoding", result.error
+    assert f"content-encoding {encoding}" in result.error
+    assert "not valid" in result.error
+    assert not result.body
+
+
+def test_a_brotli_bomb_is_stopped_by_the_existing_cap(config, server):
+    """Adding a decoder must not open a way around the decompression cap."""
+    cfg = {**config, "fetch": {**config["fetch"], "max_decompressed_bytes": 1_000_000}}
+    result = SF.safe_get(f"{server}/brotli-bomb", cfg)
+    assert result.error_kind == "too_large"
+    assert not result.body
+
+
+@pytest.mark.parametrize("header", [None, "", "identity", "gzip", "deflate", "x-gzip", "br",
+                                    "GZIP", "BR", " gzip ", "identity, gzip", "gzip, br"])
+def test_supported_content_encodings_are_never_refused(header):
+    assert SF.undecodable_encodings(header) == []
+
+
+@pytest.mark.parametrize("header,stuck", [
+    ("compress", ["compress"]),
+    ("gzip, compress", ["compress"]),
+    ("br, compress", ["compress"]),
+    ("x-unknown", ["x-unknown"]),
+])
+def test_encodings_the_stack_cannot_undo_are_named(header, stuck):
+    assert SF.undecodable_encodings(header) == stuck
+
+
+def test_what_is_decodable_is_read_from_the_http_stack_not_hardcoded():
+    """`br` becomes decodable the moment a Brotli package is installed.
+
+    Hardcoding either answer would be wrong on half the machines this runs on, so the set comes
+    from urllib3 itself. If that is ever replaced by a literal, this test says so.
+    """
+    from urllib3.response import HTTPResponse
+    decodable = SF.decodable_encodings()
+    for name in HTTPResponse.CONTENT_DECODERS:
+        assert str(name).lower() in decodable
+    assert "identity" in decodable and "" in decodable
+    if "br" in {str(n).lower() for n in HTTPResponse.CONTENT_DECODERS}:
+        assert SF.undecodable_encodings("br") == []
+    else:
+        assert SF.undecodable_encodings("br") == ["br"]
+
+
+@pytest.mark.parametrize("route", ["/compress-unrequested", "/brotli-malformed"])
+def test_a_page_that_cannot_be_decoded_degrades_to_unknown_not_to_failure(config, server, route):
+    """The scoring consequence: an unreadable page is not a badly-built page.
+
+    It must land as `fetch_failed` with the checks unmeasured, never as a page that was read and
+    found wanting.
+    """
+    artifact = A.build_artifact(f"{server}{route}", config, force_tier="heuristic")
+    page = artifact["pages"][0]
+    assert page["status"] == "error"
+    assert page["skip_reason"] == "fetch_failed"
+    assert page["raw"]["html"] == ""

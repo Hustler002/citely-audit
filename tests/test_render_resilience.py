@@ -502,3 +502,47 @@ def test_registry_no_longer_advertises_the_markup_slice():
         assert th["dom_proxy_text_chars"] > 0
         assert 0 < th["chrome_text_weight"] <= 1
         assert th["chrome_text_cap"] > 0
+
+
+# =================================================================================================
+# "No browser available" and "the render failed" are different facts
+#
+# A render can fail on a page that rewrites itself while it is being read — `page.content()` raises
+# "the page is navigating and changing the content" — and that is not the same as having no browser.
+# Reporting both as one flag put `playwright_available: false` in a report whose own error text
+# proved a browser had just run, which points a reader at reinstalling a runtime that was fine.
+# =================================================================================================
+def test_a_failed_render_still_reports_that_a_browser_was_found(monkeypatch):
+    monkeypatch.setattr(R, "probe_playwright", lambda: (True, ""))
+    monkeypatch.setattr(R, "render_with_browser", lambda *a, **k: R.RenderResult(
+        available=False, mode=R.TIER_A,
+        error="Page.content: Unable to retrieve content because the page is navigating"))
+
+    result = R.render_page("https://e.test/", "<html></html>", {})
+    assert result.browser_available is True, "a browser ran; saying otherwise misdirects the reader"
+    assert result.available is False, "the render still failed"
+    assert result.mode == R.TIER_B, "and the tier reported must be the one we actually have"
+
+
+def test_a_missing_browser_reports_no_browser(monkeypatch):
+    """The contrasting case, so the flag is not simply always true."""
+    monkeypatch.setattr(R, "probe_playwright", lambda: (False, "chromium unavailable: not installed"))
+    result = R.render_page("https://e.test/", "<html></html>", {})
+    assert result.browser_available is False
+    assert result.available is False
+    assert result.mode == R.TIER_B
+
+
+def test_forcing_the_browserless_tier_reports_no_browser():
+    result = R.render_page("https://e.test/", "<html></html>", {}, force_tier=R.TIER_B)
+    assert result.browser_available is False
+
+
+def test_the_report_flag_follows_the_browser_not_the_render():
+    """End-to-end through the field the report actually reads."""
+    rendered = {"available": False, "browser_available": True, "mode": R.TIER_B}
+    assert bool(rendered.get("browser_available")) is True
+    source = (REPO_ROOT / "skills" / "audit-orchestrator" / "scripts" / "run_audit.py").read_text(
+        encoding="utf-8")
+    assert '"playwright_available": bool(rendered.get("browser_available"))' in source, (
+        "the report must derive this from the browser probe, not from render success")

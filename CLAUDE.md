@@ -349,7 +349,7 @@ PowerShell terminal needs none of this.**
 
 ## Current status: ALL TEN PHASES COMPLETE — **compliance signed off mechanically**
 
-**1107 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**1142 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -785,7 +785,7 @@ python tests/run_precision_recall.py                                            
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 1107 passed, 0 skipped
+pytest -q                                                                                  # 1142 passed, 0 skipped
 for s in skills/*/; do agentskills validate "$s"; done                                     # all six skills, pinned in the dev extra
 ```
 
@@ -1502,3 +1502,33 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   contained an unquoted `": "`, which YAML reads as a mapping. `agentskills validate` failed the
   skill immediately; a text-only review would have shipped a skill whose frontmatter does not parse.
   Reworded, and all six validate again.
+- 2026-09-13 — **Brotli decoding added; malformed compression now reported as what it is.**
+  A live CDN answered in `br` even when asked for `identity`, so berkshirehathaway.com could not be
+  audited at all: 0 score, 0.0 coverage, one fetch error. Nothing in the analyzers or scoring moved.
+  **Supported now:** gzip, x-gzip and deflate natively, plus `br` through `Brotli==1.2.0`, picked up
+  by urllib3 automatically. The pin is exact because 1.2.0 is the first release whose decompressor
+  takes an output limit; with anything older urllib3 decodes Brotli unbounded and only warns.
+  Wheels verified for Python 3.11 and 3.12 on Windows, Linux x86_64 and macOS before pinning.
+  **Not added: zstd.** It would need `backports.zstd` on our Python range, 0 of 18 sites probed
+  sent it, and we never advertise it. It stays refused by the existing guard.
+  **Kept unchanged:** `Accept-Encoding: gzip, deflate`. We decode `br` when a server sends it
+  unasked but do not request it, so every compliant server keeps its current wire path.
+  **A second defect fixed on the way.** requests files a decode failure under `RequestException`,
+  so a corrupt gzip or br body was reported as `error_kind="network"`. Now a
+  `MalformedContentEncodingError`, subclassing the undecodable-encoding error, so it maps to
+  `content_encoding` with no change to the artifact or report schema.
+  **My own wrong test.** I first asserted a Brotli call limited to 4096 bytes returns at most 4096.
+  Measured: Brotli rounds the limit up to its own block and returned 32,752, while an unlimited call
+  returned all 1,000,000. The bound is real; the exact size is not. The test now asserts the bound.
+  **Mutation run nearly lied.** The first attempt applied only 1 of 4 mutations: `core.autocrlf` is
+  true, so the working copy is CRLF and the newline anchors matched nothing. The script now adapts
+  anchors to the file ending and exits non-zero on any mutation it cannot apply. All 4 caught.
+  **Live:** berkshirehathaway.com 0 / 0.00 / 0 findings became 53 / 0.82 / 11, five pages read, and
+  all eleven findings checked against the decoded page. A 60 MB Brotli bomb (11 KB on the wire) is
+  stopped by the existing cap at 1.2 MB peak memory.
+  **Open, deliberately not fixed:** a truncated compressed stream is accepted silently. A truncated
+  gzip body returned 34 bytes of partial HTML, a truncated br body returned an empty body, both with
+  no error. urllib3 exposes no public signal that a stream ended early, and detecting it would mean
+  owning the decode loop, which is out of scope. Pre-existing for gzip.
+  Verified: 1142 tests, 0 failed; corpus recall and precision still 100% with every score unchanged;
+  all six skills pass the reference validator.
