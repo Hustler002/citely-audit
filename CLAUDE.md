@@ -1631,3 +1631,11 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   table-of-contents entry, and the settings table in its Configuration section, were removed at the
   user's request. Verified: `scoring-config.json` parses; compliance, scoring, schema and orchestrator
   tests 160 passed; no broken README anchors.
+- 2026-09-13 — **README condensed from 615 to 396 lines** at the user's request (target 300 to 400).
+  Only the sections the user approved were edited: Usage, the check-state and report-field
+  subsections, How scoring works, Safety and read-only behavior, and Testing and validation. The
+  full sample JSON example was removed on request. The three named sections alone totalled 145 lines,
+  too few to reach the target, so the user widened the scope before any edit. Prose tables were merged
+  into single tables and repeated explanations dropped; no fact, command, field or safeguard was
+  removed. Both Mermaid diagrams are byte-identical, every `##` heading and anchor is unchanged, and
+  every link resolves. Compliance tests 49 passed.
