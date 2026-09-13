@@ -1,9 +1,10 @@
 # Sample reports
 
-Five audits of real, public websites, chosen to span very different shapes rather than to produce
-particular scores. Each `<site>.json` is the report the entrypoint wrote to stdout, reshaped to the
-current report layout without altering any score, finding or evidence; each `<site>.stderr.txt` is
-the log it wrote to stderr during the same run.
+Six audits of real, public websites, chosen to span very different shapes rather than to produce
+particular scores. Each `<site>.json` is the report the entrypoint wrote to stdout. The first five
+were reshaped to the current report layout without altering any score, finding or evidence;
+`scaler.com.json` was produced in that layout and is unedited. Each `<site>.stderr.txt` is the log
+the entrypoint wrote to stderr during the same run.
 
 Reproduce any of them with:
 
@@ -18,6 +19,7 @@ python skills/audit-orchestrator/scripts/run_audit.py --url <url>
 | `craigslist.org.json` | craigslist.org | Average and mixed: enormously useful, minimal markup, no declared language | 69 | 0.82 | 8 |
 | `spacejam.com-1996.json` | spacejam.com/1996 | The 1996 original, preserved: table layout, no headings, no metadata | 51 | 0.85 | 12 |
 | `berkshirehathaway.com.json` | berkshirehathaway.com | A server that answers in **Brotli it was never asked for**, and a famously bare page | 53 | 0.82 | 11 |
+| `scaler.com.json` | scaler.com | A strong page audited from the **bare domain, which redirects to `www`**, with reCAPTCHA on its sign-up forms | 94 | 1.00 | 3 |
 
 Every run finished far inside the five-minute budget; the slowest was 82 seconds.
 
@@ -56,6 +58,18 @@ An encoding the HTTP stack still cannot undo, or a body that claims an encoding 
 contain, is refused rather than read. The audit then records `content_encoding` as a fetch error
 and resolves the affected checks to `unknown`, so undecodable bytes never reach an analyzer.
 
+**scaler.com** — a strong result that also shows what a live run can get wrong. Every check was
+measured (coverage 1.00). Identity is declared as an `EducationalOrganization` with a logo, a
+contact point and four `sameAs` links, so Entity Trust loses points only for a missing `og:type`.
+The other two findings are both medium. The first is real: the homepage's prose contains no list,
+table or definition list. The second is not: 19 of 77 images are flagged as possibly carrying
+facts, but the named files, such as `rectangle-737.webp`, are 42×42 icons marked `alt=""`, which
+HTML uses for decoration, and the check treats an empty alt the same as a missing one. One proactive
+recommendation fires, for 23 numeric claims with no date or source. A second, about facts in prose,
+is withheld because the same issue is already finding F-001. The report is marked
+`partial: true` for a reason covered under the limitations below, not because anything went
+unmeasured.
+
 ## Known limitations these runs illustrate
 
 - **A live site is not a fixture.** Repeated runs of craigslist scored 69 three times out of five,
@@ -67,3 +81,11 @@ and resolves the affected checks to `unknown`, so undecodable bytes never reach 
   heuristic looks for. The finding stays `partial`, `heuristic`, and names the file, so a reader can
   dismiss it in seconds. Measured across these sites, ten of thirteen images on bundesregierung.de
   matched the same filename rule and produced no finding at all, because they carry real alt text.
+- **A page can be reported as blocked when it is not.** On scaler.com, `/events` is a real page with
+  about 9,000 characters of visible text, but its sign-up forms load reCAPTCHA, and a captcha marker
+  marks a page blocked however much content it carries. That one page is the only reason the report
+  says `partial_reason: "blocked"`; every other page loaded normally.
+- **A redirect from the bare domain to `www` can audit the homepage twice.** scaler.com was audited
+  as `https://scaler.com`, which redirects to `https://www.scaler.com/`. Pages are selected against
+  the address as requested, not as redirected, so the navigation's link to `https://www.scaler.com/`
+  looked like a different page, and the homepage fills two of the five places in `pages_checked`.
