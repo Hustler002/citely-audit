@@ -47,11 +47,16 @@ def detect_language(html: str) -> tuple:
     Deliberately conservative: we report what the page DECLARES rather than guessing from content.
     A wrong guess would wrongly enable language-dependent checks and produce exactly the false
     positives the i18n gate exists to prevent. Undetected simply means those checks stay `unknown`.
+
+    The value may be quoted or not. HTML allows `<html lang=en>`, which minified pages emit, and
+    requiring quotes silently discarded a real declaration, so the page's language-dependent checks
+    resolved to `unknown` as if it had declared nothing.
     """
     import re
     if not html:
         return None, None
-    m = re.search(r"<html[^>]*\blang\s*=\s*[\"']([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)[\"']", html[:4000], re.I)
+    m = re.search(r"<html[^>]*\blang\s*=\s*[\"']?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)(?=[\"'\s/>]|$)",
+                  html[:4000], re.I)
     if m:
         return m.group(1).lower(), "html_lang"
     return None, None

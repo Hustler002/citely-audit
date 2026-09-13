@@ -761,12 +761,14 @@ def advise(findings, check_states, artifact, corrective_templates, proactive_tem
 def artifact_from_html_file(path: str) -> dict:
     """Minimal artifact for offline mode, so the skill is independently runnable.
 
-    Language is read from the document's own `lang` attribute, never guessed, matching the
-    analyzers: an undeclared language leaves the language-gated detectors silent.
+    Language is read from the document's own `lang` attribute, quoted or not as HTML allows, and
+    never guessed, matching the analyzers: an undeclared language leaves the language-gated
+    detectors silent.
     """
     html = Path(path).read_text(encoding="utf-8", errors="replace")
-    match = re.search(r"<html[^>]*\blang\s*=\s*[\"']([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)[\"']",
-                      html, re.IGNORECASE)
+    match = re.search(
+        r"<html[^>]*\blang\s*=\s*[\"']?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)(?=[\"'\s/>]|$)",
+        html, re.IGNORECASE)
     lang = match.group(1).lower() if match else None
     return {
         "requested_url": f"file://{path}", "final_url": f"file://{path}",

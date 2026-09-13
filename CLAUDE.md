@@ -349,7 +349,7 @@ PowerShell terminal needs none of this.**
 
 ## Current status: ALL TEN PHASES COMPLETE — **compliance signed off mechanically**
 
-**1144 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
+**1168 tests, 0 skipped.** `run_audit.py` fetches, selects pages, renders, runs all four analyzers as
 subprocesses, scores, and emits a schema-valid JSON report — and then `remediation-advisor` attaches a
 copy-paste snippet and a validation procedure to every finding, plus proactive suggestions where no
 defect was found. The marketplace is now **six skills**, one entrypoint.
@@ -469,6 +469,7 @@ All ten phases are complete. The remaining optional, unscored items have been re
 | 11 | **Character-count bands are calibrated for alphabetic scripts and applied to logographic ones.** `content.title_descriptive` (15-70) and `content.meta_description` (50-160) are both `requires_language=false` and count raw characters. A CJK character carries roughly a morpheme, so the same organisation passes in English and fails in its own script. Proof from one real page: `jma.go.jp` titles itself `気象庁 Japan Meteorological Agency` (31 chars, **pass**); the Japanese name alone is 3 chars (**partial**). Measured on 9 CJK homepages: **6 of 9 report a false TITLE partial** (総務省 = 3 chars = "Ministry of Internal Affairs and Communications", 46 Latin chars; 文部科学省 = 5 chars = 61 Latin chars), and **2 of 9 also a false DESC partial**. `detect_faq_schema`'s 8-character question floor is a minor third instance. | **High** | **Open — deliberately NOT fixed.** The defect is proven; no remedy is. East Asian Width gives a factor of 2, measured insufficient (総務省 → 6, still under 15); a CJK-specific floor would be a constant fitted to a 9-site sample, the fit-to-fixtures failure this project has punished five times; `requires_language` gating is too blunt because `language.supported` is `["en"]` alone, so it would also gate German and French, where the band is valid. Needs a labelled multi-script corpus with human judgements of title adequacy before any constant is chosen. |
 | 12 | **`authority_domains` contradicts its own check's definition.** `check_sameas_authority` documents authority as "a record somebody ELSE maintains" and grades self-published profiles `partial` because "the brand controls both ends". The list nevertheless contains `linkedin.com`, `github.com` and `gitlab.com`, whose organisation profiles are created and controlled by the organisation — while `facebook.com`, equally self-managed, is classified social. Observed effect: `digital.go.jp` scores a **`pass`** on a LinkedIn company page alone, i.e. full authority credit with no independent corroboration. | Medium | **Open — not changed.** Genuinely contested: LinkedIn requires domain verification and is widely used for entity reconciliation, so its inclusion is defensible. Reclassifying would move `healthy_page.html` and `archetype_adversarial.html`, both carrying labelled corpus score bands, so it needs a deliberate re-label rather than a unilateral edit. |
 | 13 | **A truncated compressed body is accepted without error.** urllib3 exposes no public signal that a gzip or Brotli stream ended early, so a body cut short decodes to partial or empty HTML and is analysed as if complete. Measured: truncated gzip returned 34 bytes of partial HTML and truncated Brotli an empty body, both with no error. Pre-existing for gzip. | Low | **Open, deliberately not fixed (decided 2026-09-13).** Rare in practice. Detecting it would mean owning the decode loop instead of using urllib3, and a narrower rule that treats compressed bytes with no decoded output as malformed would miss partial truncation and wrongly refuse a genuinely empty compressed page. |
+| 14 | **A page that declares no language loses the language-dependent checks, even when it is plainly English.** Detection trusts only a declared `<html lang>`, so three scored checks and two proactive detectors resolve to `unknown` on such pages. Measured on 41 real homepages: 18 pages declaring English score 14.2% to 28.6% common English function words, 15 non-English Latin-script pages 0.0% to 3.5%, and Japanese and Chinese pages at most 7.5% with under 45% Latin script. Google determines page language from visible content and ignores `lang`, and the artifact schema already reserves `content_heuristic` as a language source. | Medium | **Open, deliberately not changed (decided 2026-09-13).** A content fallback would rescue only 1 of 3 undeclared English sites in the sample, because the other two carry too little prose to judge, and it would replace the declared-only rule and change scores. Revisit with a larger, deliberately mixed-language sample. |
 
 | 7 | **`allow_private_hosts` is a live SSRF bypass switch.** Default false and test-only, but if it were ever set true in a real run the guard is fully disabled. Phase 3 must pass it only from test fixtures, never from CLI input. | Medium | Guard in Phase 3 |
 
@@ -786,7 +787,7 @@ python tests/run_precision_recall.py                                            
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com          # live audit
 python skills/audit-orchestrator/scripts/run_audit.py --html-file tests/fixtures/healthy_page.html
 python skills/audit-orchestrator/scripts/run_audit.py --url https://example.com --ci      # exit 1 on any critical
-pytest -q                                                                                  # 1144 passed, 0 skipped
+pytest -q                                                                                  # 1168 passed, 0 skipped
 for s in skills/*/; do agentskills validate "$s"; done                                     # all six skills, pinned in the dev extra
 ```
 
@@ -1554,3 +1555,30 @@ Without activating the venv, prefix commands with `.\.venv\Scripts\python.exe` i
   676 to 601. No score, check state, finding or piece of evidence changed.
   Verified: 1144 tests, 0 failed; 4 of 4 mutations caught; corpus recall and precision 100%; all six
   skills valid; all six reports pass the schema and the required floor.
+- 2026-09-13 — **Empty `recommendations` investigated; unquoted `lang` fixed; no new detectors.**
+  **Why recommendations are usually empty: by design.** The four proactive detectors only fire on
+  content they can verify, and two are language-gated. With the gate bypassed, 0 of 4 fired on
+  craigslist, spacejam, berkshirehathaway and bundesregierung, raw or rendered; stripe.com gets 2 and
+  6 of 19 fixtures get at least one. An empty list is a correct result, not a missing feature.
+  **Seven language-neutral candidate detectors measured on 28 real homepages; none added** (user
+  decision). Snippet restrictions: the `data-nosnippet` hits were cookie banners (gov.uk,
+  mozilla.org). Header-less data tables: the hits were layout tables (Hacker News, Berkshire).
+  Non-crawlable navigation, missing hreflang, language-neutral undated quantities, PDF-locked content
+  and content iframes were no better: the language-path pattern matched W3C's `/TR/`, and the iframe
+  hits were a localStorage helper and a login popup. None separated real gaps from noise.
+  **Bug found and fixed (user-approved): an unquoted `lang` was ignored.** smashingmagazine.com ships
+  `<html lang=en>`, valid HTML, and all four detection copies required quotes, so its
+  language-dependent checks resolved to `unknown` as if nothing were declared. All four copies
+  (`_artifact.detect_language`, both analyzers' `_LANG_ATTR_RE`, `advise.artifact_from_html_file`)
+  now accept quoted or unquoted values, still declared-only and never guessed, with a boundary so
+  `lang=english` and `lang=en_US` are not read as tags. A test runs every case through each skill's
+  real offline entry point so the copies cannot drift. All 19 fixtures use quoted `lang`, so no
+  fixture score could change. Live: smashingmagazine.com now language `en`, coverage 1.0, 0 unknown
+  checks, score 89, 4 findings, schema valid.
+  **Content-based language detection recorded as open issue 14, not changed.**
+  **Noticed, not changed:** the pattern is greedy, so a later `data-lang` in the same tag wins
+  (`<html lang="en" data-lang="fr">` reads `fr`, before and after this fix). Pre-existing; fixing it
+  also changes `xml:lang` handling, which was not approved.
+  Verified: 1168 tests, 0 failed, 0 skipped; 5 of 5 mutations caught (each copy reverted to
+  quoted-only, and the boundary removed), sources restored by hash; corpus recall and precision 100%
+  with every score in range; all six skills valid.

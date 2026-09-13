@@ -296,14 +296,52 @@ def test_403_treated_as_bot_challenge():
 
 
 # --- Language detection --------------------------------------------------------------------------
-@pytest.mark.parametrize("html,expected", [
+LANGUAGE_CASES = [
     ('<html lang="en">', "en"),
     ('<html lang="en-GB">', "en-gb"),
     ('<html lang="de">', "de"),
     ("<html>", None),
-])
+    # Unquoted values are valid HTML and common on minified pages. Requiring quotes discarded a
+    # real declaration on smashingmagazine.com, which ships `<html lang=en>`.
+    ("<html lang=en>", "en"),
+    ("<html lang=en-GB>", "en-gb"),
+    ("<html lang=en><head><title>x</title>", "en"),
+    ('<html class="no-js" lang=de>', "de"),
+    ("<html lang = fr dir=ltr>", "fr"),
+    # Accepting unquoted values must not start accepting things that are not language tags.
+    ('<html lang="">', None),
+    ("<html lang=>", None),
+    ("<html lang=e>", None),
+    ("<html lang=english>", None),
+    ("<html lang=en_US>", None),
+]
+
+
+@pytest.mark.parametrize("html,expected", LANGUAGE_CASES)
 def test_language_detection(html, expected):
     assert A.detect_language(html)[0] == expected
+
+
+@pytest.mark.parametrize("html,expected", LANGUAGE_CASES)
+def test_every_copy_of_language_detection_agrees(tmp_path, html, expected):
+    """Each skill carries its own copy, by design, so each must read a declaration the same way.
+
+    Run through each skill's real offline entry point rather than comparing regex text, so a copy
+    that is changed in how it is CALLED is caught as well as one changed in its pattern.
+    """
+    for sub in ("engagement-orientation-audit", "quotability-density-audit", "remediation-advisor"):
+        path = str(REPO_ROOT / "skills" / sub / "scripts")
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    import advise as AD
+    import engagement_orientation as EO
+    import quotability_density as QD
+
+    page = tmp_path / "page.html"
+    page.write_text(html + "<body><p>Body.</p></body></html>", encoding="utf-8")
+    detected = {name: module.artifact_from_html_file(str(page))["language"]["detected"]
+                for name, module in (("engagement", EO), ("quotability", QD), ("advisor", AD))}
+    assert detected == {"engagement": expected, "quotability": expected, "advisor": expected}, detected
 
 
 def test_language_support_gate(config):

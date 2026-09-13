@@ -49,8 +49,10 @@ _WS_RE = re.compile(r"\s+")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 _DIGIT_RE = re.compile(r"\d")
 _PROPER_NOUN_RE = re.compile(r"(?<!^)(?<![.!?]\s)\b[A-Z][a-z]{2,}")
+# Quoted or unquoted, as HTML allows. Kept identical to the orchestrator's `detect_language`.
 _LANG_ATTR_RE = re.compile(
-    r"<html[^>]*\blang\s*=\s*[\"']([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)[\"']", re.IGNORECASE)
+    r"<html[^>]*\blang\s*=\s*[\"']?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)(?=[\"'\s/>]|$)",
+    re.IGNORECASE)
 
 DEFAULT_THRESHOLDS = {
     "content.title_descriptive": {"min_chars": 15, "max_chars": 70},

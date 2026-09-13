@@ -82,8 +82,10 @@ def has_proper_noun(text: str) -> bool:
         sentence_start = False
         previous = token
     return False
+# Quoted or unquoted, as HTML allows. Kept identical to the orchestrator's `detect_language`.
 _LANG_ATTR_RE = re.compile(
-    r"<html[^>]*\blang\s*=\s*[\"']([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)[\"']", re.IGNORECASE)
+    r"<html[^>]*\blang\s*=\s*[\"']?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)(?=[\"'\s/>]|$)",
+    re.IGNORECASE)
 
 PROXY_DEFAULTS = {"dom_proxy_text_chars": 1200, "chrome_text_weight": 0.1, "chrome_text_cap": 400}
 
